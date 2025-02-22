@@ -4,3 +4,4 @@ pandas-ta==0.3.14b0
 numpy==1.26.3
 requests==2.31.0
 beautifulsoup4==4.12.3
+tenacity==8.2.3
