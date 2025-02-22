@@ -1,7 +1,6 @@
 yfinance==0.2.36
 pandas==2.2.0
-pandas-ta==0.3.14b0
 numpy==1.26.3
 requests==2.31.0
-beautifulsoup4==4.12.3
 tenacity==8.2.3
+pytest==8.0.0

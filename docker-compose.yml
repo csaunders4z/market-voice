@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   market_voice:
     build: .
@@ -11,3 +9,14 @@ services:
       - .env
     environment:
       - PYTHONPATH=/app
+    command: python src/market_data.py
+
+  test:
+    build: .
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    command: pytest -v tests/

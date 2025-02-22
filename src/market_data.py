@@ -3,21 +3,26 @@ NASDAQ-100 Market Data Collector
 Fetches daily performance data and relevant news for top movers
 """
 
-import yfinance as yf
+import os
+import requests
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
 from datetime import datetime, timedelta
 import logging
 import sys
 from pathlib import Path
-import requests
-from bs4 import BeautifulSoup
 import time
 import warnings
+from tenacity import retry, stop_after_attempt, wait_exponential
+import yfinance as yf
 
-# Suppress the yfinance FutureWarning
+# Suppress warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
+
+# Configure API keys
+FMP_API_KEY = os.getenv('FMP_API_KEY')
+if not FMP_API_KEY:
+    raise ValueError("FMP_API_KEY environment variable not set")
 
 def setup_logging():
     """Configure logging to both file and console"""
@@ -32,184 +37,118 @@ def setup_logging():
         ]
     )
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def fetch_fmp_data(endpoint, params=None):
+    """Fetch data from FMP API with retry logic"""
+    base_url = "https://financialmodelingprep.com/api/v3"
+    url = f"{base_url}/{endpoint}"
+    
+    params = params or {}
+    params['apikey'] = FMP_API_KEY
+    
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
+
 def get_nasdaq100_tickers():
-    """Get NASDAQ-100 constituents with fallback options."""
+    """Get NASDAQ-100 constituents from FMP API with fallback to Wikipedia"""
     try:
-        logging.info("Fetching NASDAQ-100 constituents from Wikipedia...")
-        tables = pd.read_html('https://en.wikipedia.org/wiki/Nasdaq-100')
+        logging.info("Fetching NASDAQ-100 constituents from FMP...")
+        indices = fetch_fmp_data("nasdaq_constituent")
+        tickers = [stock['symbol'] for stock in indices]
+        logging.info(f"Successfully retrieved {len(tickers)} tickers from FMP")
+        return tickers
         
-        for i, table in enumerate(tables):
-            columns = table.columns.tolist()
-            possible_ticker_columns = ['Ticker', 'Symbol', 'Ticker symbol']
+    except Exception as e:
+        logging.warning(f"Error fetching from FMP: {str(e)}. Using fallback method.")
+        try:
+            logging.info("Fetching NASDAQ-100 constituents from Wikipedia...")
+            tables = pd.read_html('https://en.wikipedia.org/wiki/Nasdaq-100')
             
-            for col in possible_ticker_columns:
-                if col in columns:
-                    tickers = table[col].tolist()
-                    logging.info(f"Successfully retrieved {len(tickers)} tickers from table {i}")
-                    return [ticker.strip() for ticker in tickers if isinstance(ticker, str)]
-        
-        raise ValueError("Could not find ticker column in Wikipedia tables")
-        
-    except Exception as e:
-        logging.warning(f"Error fetching from Wikipedia: {str(e)}. Using fallback ticker list.")
-        fallback_tickers = [
-            'AAPL', 'MSFT', 'AMZN', 'NVDA', 'META', 'GOOGL', 'GOOG', 'TSLA', 'AMD', 'ADBE'
-        ]
-        logging.info(f"Using fallback list of {len(fallback_tickers)} major NASDAQ-100 tickers")
-        return fallback_tickers
+            for i, table in enumerate(tables):
+                columns = table.columns.tolist()
+                possible_ticker_columns = ['Ticker', 'Symbol', 'Ticker symbol']
+                
+                for col in possible_ticker_columns:
+                    if col in columns:
+                        tickers = table[col].tolist()
+                        logging.info(f"Successfully retrieved {len(tickers)} tickers from table {i}")
+                        return [ticker.strip() for ticker in tickers if isinstance(ticker, str)]
+            
+            raise ValueError("Could not find ticker column in Wikipedia tables")
+            
+        except Exception as e:
+            logging.warning(f"Error fetching from Wikipedia: {str(e)}. Using fallback ticker list.")
+            fallback_tickers = [
+                'AAPL', 'MSFT', 'AMZN', 'NVDA', 'META', 'GOOGL', 'GOOG', 'TSLA', 'AMD', 'ADBE'
+            ]
+            logging.info(f"Using fallback list of {len(fallback_tickers)} major NASDAQ-100 tickers")
+            return fallback_tickers
 
-def calculate_technical_indicators(hist_data):
-    """Calculate technical indicators using pandas-ta with improved error handling"""
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def get_stock_quote(ticker):
+    """Get current stock quote from FMP"""
     try:
-        if len(hist_data) < 30:  # Need enough data for calculations
-            return {
-                'rsi': None,
-                'macd': None,
-                'macd_signal': None,
-                'bb_upper': None,
-                'bb_lower': None,
-                'atr': None
-            }
-
-        df = hist_data.copy()
-        
-        # Initialize indicators dictionary
-        indicators = {
-            'rsi': None,
-            'macd': None,
-            'macd_signal': None,
-            'bb_upper': None,
-            'bb_lower': None,
-            'atr': None
-        }
-        
-        # Calculate RSI
-        try:
-            rsi = df.ta.rsi(length=14)
-            if not rsi.empty and not pd.isna(rsi.iloc[-1]):
-                indicators['rsi'] = round(float(rsi.iloc[-1]), 2)
-        except Exception as e:
-            logging.debug(f"RSI calculation failed: {str(e)}")
-
-        # Calculate MACD
-        try:
-            macd = df.ta.macd()
-            if not macd.empty:
-                if not pd.isna(macd['MACD_12_26_9'].iloc[-1]):
-                    indicators['macd'] = round(float(macd['MACD_12_26_9'].iloc[-1]), 2)
-                if not pd.isna(macd['MACDs_12_26_9'].iloc[-1]):
-                    indicators['macd_signal'] = round(float(macd['MACDs_12_26_9'].iloc[-1]), 2)
-        except Exception as e:
-            logging.debug(f"MACD calculation failed: {str(e)}")
-
-        # Calculate Bollinger Bands
-        try:
-            bbands = df.ta.bbands()
-            if not bbands.empty:
-                if not pd.isna(bbands['BBU_20_2.0'].iloc[-1]):
-                    indicators['bb_upper'] = round(float(bbands['BBU_20_2.0'].iloc[-1]), 2)
-                if not pd.isna(bbands['BBL_20_2.0'].iloc[-1]):
-                    indicators['bb_lower'] = round(float(bbands['BBL_20_2.0'].iloc[-1]), 2)
-        except Exception as e:
-            logging.debug(f"Bollinger Bands calculation failed: {str(e)}")
-
-        # Calculate ATR
-        try:
-            atr = df.ta.atr()
-            if not atr.empty and not pd.isna(atr.iloc[-1]):
-                indicators['atr'] = round(float(atr.iloc[-1]), 2)
-        except Exception as e:
-            logging.debug(f"ATR calculation failed: {str(e)}")
-
-        return indicators
-
+        quote = fetch_fmp_data(f"quote/{ticker}")
+        if quote and len(quote) > 0:
+            return quote[0]
+        raise ValueError(f"No quote data returned for {ticker}")
     except Exception as e:
-        logging.error(f"Error in technical indicators calculation: {str(e)}")
-        return {
-            'rsi': None,
-            'macd': None,
-            'macd_signal': None,
-            'bb_upper': None,
-            'bb_lower': None,
-            'atr': None
-        }
+        logging.error(f"Error fetching quote for {ticker}: {str(e)}")
+        raise
 
-def filter_news_relevance(title, percent_change):
-    """
-    Filter news items for relevance based on various criteria.
-    Returns a relevance score (0-1).
-    """
-    title_lower = title.lower()
-    
-    # Keywords that indicate price movement explanation
-    positive_keywords = ['beats', 'higher', 'jumps', 'surges', 'raises', 'upgraded']
-    negative_keywords = ['misses', 'lower', 'falls', 'drops', 'cuts', 'downgraded']
-    neutral_keywords = ['earnings', 'announces', 'reports', 'guidance', 'outlook']
-    
-    # Skip promotional or generic content
-    skip_phrases = [
-        'named one of', 'best companies', 'what you need to know',
-        'stocks to watch', 'trending stock', 'stocks to buy',
-        'press release', 'newswires', 'everything you need'
-    ]
-    
-    # Check for generic or promotional content
-    if any(phrase in title_lower for phrase in skip_phrases):
-        return 0
-        
-    # Calculate relevance score
-    score = 0
-    
-    # Match movement direction with news sentiment
-    if percent_change > 0 and any(word in title_lower for word in positive_keywords):
-        score += 0.3
-    elif percent_change < 0 and any(word in title_lower for word in negative_keywords):
-        score += 0.3
-        
-    # Additional score for specific event keywords
-    if any(word in title_lower for word in neutral_keywords):
-        score += 0.2
-        
-    return score
-
-def get_stock_news(ticker, percent_change):
-    """Get and filter relevant news for a stock"""
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def get_stock_profile(ticker):
+    """Get company profile from FMP"""
     try:
-        stock = yf.Ticker(ticker)
-        news_list = stock.news
-        
-        if not news_list:
+        profile = fetch_fmp_data(f"profile/{ticker}")
+        if profile and len(profile) > 0:
+            return profile[0]
+        raise ValueError(f"No profile data returned for {ticker}")
+    except Exception as e:
+        logging.error(f"Error fetching profile for {ticker}: {str(e)}")
+        raise
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def get_stock_news(ticker):
+    """Get stock news from FMP"""
+    try:
+        # Get company news
+        news = fetch_fmp_data(f"stock_news", {"tickers": ticker, "limit": 5})
+        if not news:
             return "No recent news found"
-            
-        # Process news items
-        relevant_news = []
-        for news in news_list:
-            title = news.get('title', '')
-            relevance = filter_news_relevance(title, percent_change)
-            
-            if relevance > 0:
-                relevant_news.append({
-                    'title': title,
-                    'source': news.get('publisher', 'Yahoo Finance'),
-                    'relevance': relevance
-                })
         
-        # Sort by relevance and get top 2
-        relevant_news.sort(key=lambda x: x['relevance'], reverse=True)
-        top_news = relevant_news[:2]
-        
-        if not top_news:
-            return "No relevant news found"
-            
         # Format news items
-        return '; '.join(f"{item['title']} ({item['source']})" for item in top_news)
+        formatted_news = []
+        for item in news[:2]:  # Take top 2 news items
+            title = item.get('title', '')
+            source = item.get('site', 'Unknown Source')
+            formatted_news.append(f"{title} ({source})")
         
+        return "; ".join(formatted_news)
     except Exception as e:
         logging.error(f"Error fetching news for {ticker}: {str(e)}")
         return "Error fetching news"
 
+def calculate_technical_indicators(ticker):
+    """Calculate technical indicators using FMP data"""
+    try:
+        # Get technical indicators from FMP
+        indicators = fetch_fmp_data(f"technical_indicators/daily/{ticker}", {"period": 14})
+        if not indicators:
+            return {"rsi": None, "macd": None}
+            
+        latest = indicators[0] if indicators else {}
+        return {
+            "rsi": round(float(latest.get('rsi', 0)), 2),
+            "macd": round(float(latest.get('macd', 0)), 2)
+        }
+    except Exception as e:
+        logging.error(f"Error calculating technical indicators for {ticker}: {str(e)}")
+        return {"rsi": None, "macd": None}
+
 def get_daily_performance(tickers):
-    """Get comprehensive daily performance data."""
+    """Get comprehensive daily performance data using FMP"""
     performance_data = []
     successful_tickers = 0
     
@@ -218,52 +157,50 @@ def get_daily_performance(tickers):
     
     for ticker in tickers:
         try:
-            # Get stock data
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period='30d')
+            # Add delay between requests
+            time.sleep(0.5)
             
-            if len(hist) >= 2:
-                prev_close = hist['Close'].iloc[-2]
-                current_close = hist['Close'].iloc[-1]
-                dollar_change = current_close - prev_close
-                percent_change = (dollar_change / prev_close) * 100
+            # Get quote data
+            quote = get_stock_quote(ticker)
+            if not quote:
+                continue
                 
-                # Get company info
-                company_name = stock.info.get('longName', ticker)
-                
-                # Get technical indicators
-                tech_indicators = calculate_technical_indicators(hist)
-                
-                # Get news for significant movers (>2% movement)
-                news_summary = "No significant move" if abs(percent_change) <= 2 else get_stock_news(ticker, percent_change)
-                
-                # Calculate volume ratio with error handling
-                avg_volume = stock.info.get('averageVolume', 0)
-                volume_ratio = round(hist['Volume'].iloc[-1] / avg_volume, 2) if avg_volume else None
-                
-                performance_data.append({
-                    'ticker': ticker,
-                    'company_name': company_name,
-                    'close': round(current_close, 2),
-                    'dollar_change': round(dollar_change, 2),
-                    'percent_change': round(percent_change, 2),
-                    'volume': hist['Volume'].iloc[-1],
-                    'avg_volume': avg_volume,
-                    'volume_ratio': volume_ratio,
-                    'collection_timestamp': collection_timestamp,
-                    'market_cap': stock.info.get('marketCap', 0),
-                    'sector': stock.info.get('sector', ''),
-                    'industry': stock.info.get('industry', ''),
-                    'rsi': tech_indicators['rsi'],
-                    'macd': tech_indicators['macd'],
-                    'recent_news': news_summary
-                })
-                
-                successful_tickers += 1
-                logging.info(f"Successfully processed {ticker}")
-                
-                # Add small delay to avoid rate limiting
-                time.sleep(0.1)
+            # Get company profile
+            profile = get_stock_profile(ticker)
+            if not profile:
+                continue
+            
+            # Calculate changes
+            price = quote.get('price', 0)
+            change = quote.get('change', 0)
+            change_percent = quote.get('changesPercentage', 0)
+            
+            # Get technical indicators
+            tech_indicators = calculate_technical_indicators(ticker)
+            
+            # Get news for significant movers (>2% movement)
+            news_summary = "No significant move" if abs(change_percent) <= 2 else get_stock_news(ticker)
+            
+            performance_data.append({
+                'ticker': ticker,
+                'company_name': profile.get('companyName', ticker),
+                'close': round(price, 2),
+                'dollar_change': round(change, 2),
+                'percent_change': round(change_percent, 2),
+                'volume': quote.get('volume', 0),
+                'avg_volume': quote.get('avgVolume', 0),
+                'volume_ratio': round(quote.get('volume', 0) / quote.get('avgVolume', 1), 2) if quote.get('avgVolume', 0) > 0 else None,
+                'collection_timestamp': collection_timestamp,
+                'market_cap': profile.get('mktCap', 0),
+                'sector': profile.get('sector', ''),
+                'industry': profile.get('industry', ''),
+                'rsi': tech_indicators['rsi'],
+                'macd': tech_indicators['macd'],
+                'recent_news': news_summary
+            })
+            
+            successful_tickers += 1
+            logging.info(f"Successfully processed {ticker}")
                 
         except Exception as e:
             logging.error(f"Error processing {ticker}: {str(e)}")
