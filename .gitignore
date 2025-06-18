@@ -1,3 +1,44 @@
+# Sensitive Information
+*.key
+*.pem
+*.p12
+*.pfx
+*secret*
+*password*
+*credential*
+
+# API Keys and Configuration
+.env
+.env.local
+.env.production
+config.env
+secrets.json
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE Files
+.vscode/
+.idea/
+*.sublime-*
+
+# Logs
+*.log
+logs/
+
+# Personal Notes
+personal-notes/
+drafts/
+
 # Environment files with API keys
 .env
 .env.local
@@ -9,10 +50,6 @@
 *apikey*
 *secret*
 *password*
-
-# Logs
-logs/
-*.log
 
 # Output files
 output/
@@ -46,6 +83,9 @@ venv/
 env/
 ENV/
 
+# Docker
+.dockerignore
+
 # IDE
 .vscode/
 .idea/
@@ -55,9 +95,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
-
-# Docker
-.dockerignore
 
 # Temporary files
 *.tmp
