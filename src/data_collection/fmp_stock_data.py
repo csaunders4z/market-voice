@@ -7,18 +7,22 @@ from datetime import datetime, timedelta
 from loguru import logger
 import os
 import numpy as np
+import time
 
 from ..config.settings import get_settings
+from ..utils.rate_limiter import api_rate_limiter, rate_limiter
 
 
 class FMPStockDataCollector:
     """Collects and analyzes stock market data using FMP API"""
     def __init__(self):
-        self.api_key = os.getenv("FMP_API_KEY", "")
+        self.settings = get_settings()
+        self.api_key = self.settings.fmp_api_key
         self.symbols = []  # Will be populated dynamically
         self.base_url = "https://financialmodelingprep.com/api/v3"
         self._load_nasdaq_100_symbols()
 
+    @api_rate_limiter.fmp_request
     def _load_nasdaq_100_symbols(self):
         """Dynamically load the current NASDAQ-100 symbols from FMP API"""
         try:
@@ -100,6 +104,7 @@ class FMPStockDataCollector:
             "crossover": crossover
         }
 
+    @api_rate_limiter.fmp_request
     def _fetch_historical_data(self, symbol: str, days: int = 30) -> List[Dict]:
         """Fetch historical price data for technical analysis"""
         try:
@@ -118,6 +123,7 @@ class FMPStockDataCollector:
             logger.error(f"Error fetching historical data for {symbol}: {str(e)}")
             return []
 
+    @api_rate_limiter.fmp_request
     def fetch_stock_data(self, symbol: str) -> Optional[Dict]:
         """Fetch data for a single stock symbol from FMP with technical indicators"""
         try:
@@ -181,17 +187,23 @@ class FMPStockDataCollector:
             return None
 
     def collect_data(self) -> List[Dict]:
-        """Collect data for all symbols"""
-        logger.info("Starting FMP data collection with technical indicators")
-        all_data = []
+        """Collect data for all symbols with optimized rate limiting"""
+        logger.info("Starting FMP data collection with technical indicators and rate limiting")
         
-        for symbol in self.symbols:
-            logger.debug(f"Fetching FMP data for {symbol}")
-            data = self.fetch_stock_data(symbol)
-            if data:
-                all_data.append(data)
+        # Limit symbols to avoid excessive API calls
+        symbols_to_collect = self.symbols[:self.settings.max_symbols_per_collection]
+        logger.info(f"Collecting data for {len(symbols_to_collect)} symbols (limited from {len(self.symbols)})")
         
-        logger.info(f"Collected FMP data for {len(all_data)}/{len(self.symbols)} symbols")
+        # Use batch processing with rate limiting
+        all_data = rate_limiter.batch_process(
+            items=symbols_to_collect,
+            batch_size=self.settings.fmp_batch_size,
+            batch_delay=self.settings.fmp_batch_delay,
+            process_func=self.fetch_stock_data,
+            api_name="FMP"
+        )
+        
+        logger.info(f"Collected FMP data for {len(all_data)}/{len(symbols_to_collect)} symbols")
         return all_data
 
     def analyze_market_sentiment(self, stock_data: List[Dict]) -> Dict:

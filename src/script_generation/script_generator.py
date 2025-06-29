@@ -19,10 +19,11 @@ class ScriptGenerator:
     """Generates professional financial news scripts using OpenAI"""
     
     def __init__(self):
-        openai.api_key = get_settings().openai_api_key
-        self.model = get_settings().openai_model
-        self.max_tokens = get_settings().max_tokens
-        self.temperature = get_settings().temperature
+        self.settings = get_settings()
+        self.client = openai.OpenAI(api_key=self.settings.openai_api_key)
+        self.model = self.settings.openai_model
+        self.max_tokens = self.settings.max_tokens
+        self.temperature = self.settings.temperature
         
     def create_script_prompt(self, market_data: Dict, lead_host: str) -> str:
         """Create the prompt for script generation"""
@@ -176,8 +177,8 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             # Create the prompt
             prompt = self.create_script_prompt(market_data, lead_host)
             
-            # Generate script with OpenAI
-            response = openai.ChatCompletion.create(
+            # Generate script with OpenAI (v1.x API)
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "You are a professional financial news script writer with expertise in market analysis and engaging storytelling. You must return only valid JSON."},
@@ -187,7 +188,6 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                 temperature=self.temperature
             )
             
-            # Extract and parse the response
             script_text = response.choices[0].message.content
             
             # Try to parse as JSON
@@ -214,6 +214,8 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                 script_data = self._improve_script_quality(script_data, market_data, lead_host)
             
             logger.info("Script generation completed successfully")
+            script_data['generation_success'] = True
+            script_data['lead_host'] = lead_host
             return script_data
             
         except Exception as e:
@@ -387,8 +389,8 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             # Create improvement prompt
             improvement_prompt = self._create_improvement_prompt(script_data, market_data, lead_host)
             
-            # Generate improved script
-            response = openai.ChatCompletion.create(
+            # Generate improved script (OpenAI v1.x API)
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "You are a professional script editor. Fix the identified issues and return only valid JSON."},

@@ -10,6 +10,7 @@ import os
 import yfinance as yf
 
 from ..config.settings import get_settings
+from ..utils.rate_limiter import api_rate_limiter, rate_limiter
 from .fmp_stock_data import fmp_stock_collector
 from .news_collector import news_collector
 
@@ -26,7 +27,7 @@ class UnifiedDataCollector:
         ]
         
     def _collect_fmp_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
-        """Collect data from FMP API"""
+        """Collect data from FMP API with rate limiting"""
         try:
             logger.info("Attempting to collect data from FMP API...")
             
@@ -61,38 +62,36 @@ class UnifiedDataCollector:
         except Exception as e:
             logger.error(f"FMP collection failed: {str(e)}")
             return False, [], f"FMP API - {str(e)}"
+        finally:
+            # Restore original symbols
+            fmp_stock_collector.symbols = original_symbols
     
     def _collect_yf_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
-        """Collect data from Yahoo Finance (fallback)"""
+        """Collect data from Yahoo Finance with rate limiting"""
         try:
             logger.info("Attempting to collect data from Yahoo Finance...")
             
-            # Use yfinance for basic data collection
             all_data = []
             
-            for symbol in symbols:
+            # Use batch processing for Yahoo Finance
+            def fetch_yahoo_stock(symbol: str) -> Optional[Dict]:
                 try:
                     ticker = yf.Ticker(symbol)
+                    info = ticker.info
                     
-                    # Get current day's data
+                    # Get current price data
                     hist = ticker.history(period="2d")
-                    
                     if len(hist) < 2:
-                        logger.warning(f"Insufficient data for {symbol}")
-                        continue
+                        return None
                     
-                    # Calculate daily change
                     current_price = hist['Close'].iloc[-1]
                     previous_price = hist['Close'].iloc[-2]
                     price_change = current_price - previous_price
                     percent_change = (price_change / previous_price) * 100
                     
-                    # Get volume data
                     current_volume = hist['Volume'].iloc[-1]
-                    avg_volume = ticker.info.get('averageVolume', current_volume)
+                    avg_volume = info.get('averageVolume', current_volume)
                     
-                    # Get company info
-                    info = ticker.info
                     company_name = info.get('longName', symbol)
                     
                     stock_data = {
@@ -112,27 +111,22 @@ class UnifiedDataCollector:
                         'timestamp': datetime.now().isoformat()
                     }
                     
-                    all_data.append(stock_data)
-                    
-                    # Small delay to be respectful
-                    time.sleep(0.1)
+                    return stock_data
                     
                 except Exception as e:
                     logger.warning(f"Failed to fetch {symbol} from Yahoo Finance: {str(e)}")
-                    continue
+                    return None
+            
+            # Process symbols in batches with rate limiting
+            all_data = rate_limiter.batch_process(
+                items=symbols,
+                batch_size=self.settings.yahoo_batch_size,
+                batch_delay=self.settings.yahoo_batch_delay,
+                process_func=fetch_yahoo_stock,
+                api_name="Yahoo Finance"
+            )
             
             if all_data:
-                # Get basic news data
-                news_data = news_collector.get_market_news(
-                    symbols=[stock['symbol'] for stock in all_data]
-                )
-                
-                # Add news summaries
-                for stock in all_data:
-                    symbol = stock['symbol']
-                    if symbol in news_data.get('news_summaries', {}):
-                        stock['news_summary'] = news_data['news_summaries'][symbol]
-                
                 logger.info(f"Yahoo Finance collection successful: {len(all_data)} stocks")
                 return True, all_data, "Yahoo Finance"
             else:
@@ -144,7 +138,7 @@ class UnifiedDataCollector:
             return False, [], f"Yahoo Finance - {str(e)}"
     
     def _collect_av_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
-        """Collect data from Alpha Vantage (third fallback)"""
+        """Collect data from Alpha Vantage with rate limiting"""
         try:
             logger.info("Attempting to collect data from Alpha Vantage...")
             
@@ -156,11 +150,10 @@ class UnifiedDataCollector:
             
             import requests
             
-            all_data = []
-            base_url = "https://www.alphavantage.co/query"
-            
-            for symbol in symbols:
+            def fetch_av_stock(symbol: str) -> Optional[Dict]:
                 try:
+                    base_url = "https://www.alphavantage.co/query"
+                    
                     # Get quote endpoint
                     params = {
                         'function': 'GLOBAL_QUOTE',
@@ -175,7 +168,7 @@ class UnifiedDataCollector:
                     quote = data.get('Global Quote', {})
                     if not quote:
                         logger.warning(f"No quote data for {symbol}")
-                        continue
+                        return None
                     
                     # Parse quote data
                     current_price = float(quote.get('05. price', 0))
@@ -214,27 +207,22 @@ class UnifiedDataCollector:
                         'timestamp': datetime.now().isoformat()
                     }
                     
-                    all_data.append(stock_data)
-                    
-                    # Alpha Vantage has strict rate limits (5 calls per minute for free tier)
-                    time.sleep(12)  # Wait 12 seconds between calls to stay under limit
+                    return stock_data
                     
                 except Exception as e:
                     logger.warning(f"Failed to fetch {symbol} from Alpha Vantage: {str(e)}")
-                    continue
+                    return None
+            
+            # Process symbols in batches with strict rate limiting for Alpha Vantage
+            all_data = rate_limiter.batch_process(
+                items=symbols,
+                batch_size=self.settings.alpha_vantage_batch_size,
+                batch_delay=self.settings.alpha_vantage_batch_delay,
+                process_func=fetch_av_stock,
+                api_name="Alpha Vantage"
+            )
             
             if all_data:
-                # Get basic news data
-                news_data = news_collector.get_market_news(
-                    symbols=[stock['symbol'] for stock in all_data]
-                )
-                
-                # Add news summaries
-                for stock in all_data:
-                    symbol = stock['symbol']
-                    if symbol in news_data.get('news_summaries', {}):
-                        stock['news_summary'] = news_data['news_summaries'][symbol]
-                
                 logger.info(f"Alpha Vantage collection successful: {len(all_data)} stocks")
                 return True, all_data, "Alpha Vantage"
             else:
@@ -246,44 +234,40 @@ class UnifiedDataCollector:
             return False, [], f"Alpha Vantage - {str(e)}"
     
     def _create_cached_data(self, symbols: List[str]) -> List[Dict]:
-        """Create data from cached sources or minimal web scraping (fourth fallback)"""
-        logger.warning("Using cached/minimal data as fourth fallback")
-        
-        # This would implement a more sophisticated fallback
-        # For now, we'll use a simple approach that doesn't rely on APIs
+        """Create cached/mock data for testing"""
         cached_data = []
-        
         for i, symbol in enumerate(symbols):
-            # Create basic data structure that could be populated from cache
-            # or minimal web scraping in a real implementation
-            cached_stock = {
+            # Create realistic mock data
+            base_price = 100 + (i * 10)
+            change_percent = (i % 3 - 1) * 2.5  # Alternating positive/negative changes
+            price_change = base_price * (change_percent / 100)
+            
+            cached_data.append({
                 'symbol': symbol,
-                'company_name': f'{symbol} Corporation',  # Would be from cache
-                'current_price': 100.0 + (i * 5),  # Would be from cache
-                'previous_price': 100.0 + (i * 5) - 1.0,  # Would be from cache
-                'price_change': 1.0 if i % 2 == 0 else -0.5,  # Would be from cache
-                'percent_change': 1.0 if i % 2 == 0 else -0.5,  # Would be from cache
-                'current_volume': 1000000,  # Would be from cache
-                'average_volume': 1000000,  # Would be from cache
-                'volume_ratio': 1.0,  # Would be from cache
-                'market_cap': 1000000000,  # Would be from cache
-                'rsi': 50.0,  # Would be from cache
-                'macd_signal': None,  # Would be from cache
-                'technical_signals': [],  # Would be from cache
-                'timestamp': datetime.now().isoformat(),
-                'data_source': 'Cached/Minimal'
-            }
-            cached_data.append(cached_stock)
+                'company_name': f'Mock Company {symbol}',
+                'current_price': round(base_price + price_change, 2),
+                'previous_price': round(base_price, 2),
+                'price_change': round(price_change, 2),
+                'percent_change': round(change_percent, 2),
+                'current_volume': 1000000 + (i * 100000),
+                'average_volume': 1000000,
+                'volume_ratio': 1.0 + (i * 0.1),
+                'market_cap': 1000000000 + (i * 100000000),
+                'rsi': 50.0 + (i * 5),
+                'macd_signal': None,
+                'technical_signals': [],
+                'timestamp': datetime.now().isoformat()
+            })
         
         return cached_data
     
     def collect_data(self, symbols: List[str] = None, production_mode: bool = True) -> Dict:
-        """Collect data from multiple sources with fallback"""
-        logger.info("Starting unified data collection with fallback")
+        """Collect data from multiple sources with fallback and rate limiting"""
+        logger.info("Starting unified data collection with fallback and rate limiting")
         
         # Use provided symbols or get from FMP
         if symbols is None:
-            symbols = fmp_stock_collector.symbols[:20]  # Limit for rate limit management
+            symbols = fmp_stock_collector.symbols[:self.settings.max_symbols_per_collection]
         
         logger.info(f"Collecting data for {len(symbols)} symbols")
         
