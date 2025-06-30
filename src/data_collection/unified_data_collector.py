@@ -13,6 +13,8 @@ from ..config.settings import get_settings
 from ..utils.rate_limiter import api_rate_limiter, rate_limiter
 from .fmp_stock_data import fmp_stock_collector
 from .news_collector import news_collector
+from .economic_calendar import economic_calendar
+from .free_news_sources import free_news_collector
 
 
 class UnifiedDataCollector:
@@ -67,7 +69,7 @@ class UnifiedDataCollector:
             fmp_stock_collector.symbols = original_symbols
     
     def _collect_yf_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
-        """Collect data from Yahoo Finance with rate limiting"""
+        """Collect data from Yahoo Finance with rate limiting and enhanced data"""
         try:
             logger.info("Attempting to collect data from Yahoo Finance...")
             
@@ -94,6 +96,67 @@ class UnifiedDataCollector:
                     
                     company_name = info.get('longName', symbol)
                     
+                    # Get earnings calendar data
+                    earnings_data = None
+                    try:
+                        calendar = ticker.calendar
+                        if calendar is not None and hasattr(calendar, 'empty') and not calendar.empty:
+                            next_earnings = calendar.iloc[0] if len(calendar) > 0 else None
+                            if next_earnings is not None:
+                                earnings_data = {
+                                    'date': next_earnings.get('Earnings Date', ''),
+                                    'estimate': next_earnings.get('EPS Estimate', None),
+                                    'actual': next_earnings.get('EPS Actual', None),
+                                    'revenue_estimate': next_earnings.get('Revenue Estimate', None),
+                                    'revenue_actual': next_earnings.get('Revenue Actual', None)
+                                }
+                    except Exception as e:
+                        logger.debug(f"Could not fetch earnings calendar for {symbol}: {str(e)}")
+                    
+                    # Get analyst recommendations
+                    analyst_data = None
+                    try:
+                        recommendations = ticker.recommendations
+                        if recommendations is not None and hasattr(recommendations, 'empty') and not recommendations.empty:
+                            recent_recs = recommendations.tail(5)  # Last 5 recommendations
+                            if not recent_recs.empty:
+                                # Count recommendations
+                                rec_counts = recent_recs['To Grade'].value_counts()
+                                buy_count = rec_counts.get('Buy', 0) + rec_counts.get('Strong Buy', 0)
+                                hold_count = rec_counts.get('Hold', 0)
+                                sell_count = rec_counts.get('Sell', 0) + rec_counts.get('Strong Sell', 0)
+                                
+                                # Determine consensus
+                                total = buy_count + hold_count + sell_count
+                                if total > 0:
+                                    if buy_count > hold_count and buy_count > sell_count:
+                                        consensus = 'buy'
+                                    elif sell_count > hold_count and sell_count > buy_count:
+                                        consensus = 'sell'
+                                    else:
+                                        consensus = 'hold'
+                                else:
+                                    consensus = 'hold'
+                                
+                                analyst_data = {
+                                    'consensus': consensus,
+                                    'ratings_count': {
+                                        'buy': buy_count,
+                                        'hold': hold_count,
+                                        'sell': sell_count
+                                    },
+                                    'recent_recommendations': recent_recs.tail(3).to_dict('records') if len(recent_recs) >= 3 else recent_recs.to_dict('records')
+                                }
+                    except Exception as e:
+                        logger.debug(f"Could not fetch analyst recommendations for {symbol}: {str(e)}")
+                    
+                    # Get price targets
+                    price_target = None
+                    try:
+                        price_target = info.get('targetMeanPrice')
+                    except:
+                        pass
+                    
                     stock_data = {
                         'symbol': symbol,
                         'company_name': company_name,
@@ -108,6 +171,9 @@ class UnifiedDataCollector:
                         'rsi': 50.0,  # Default neutral RSI
                         'macd_signal': None,
                         'technical_signals': [],
+                        'earnings_data': earnings_data,
+                        'analyst_data': analyst_data,
+                        'price_target': price_target,
                         'timestamp': datetime.now().isoformat()
                     }
                     
@@ -269,6 +335,10 @@ class UnifiedDataCollector:
         if symbols is None:
             symbols = fmp_stock_collector.symbols[:self.settings.max_symbols_per_collection]
         
+        # Ensure symbols is a list
+        if not isinstance(symbols, list):
+            symbols = []
+        
         logger.info(f"Collecting data for {len(symbols)} symbols")
         
         # Try each source in order
@@ -285,14 +355,16 @@ class UnifiedDataCollector:
                 
                 # Create market summary
                 market_summary = {
-                    'total_stocks': len(data),
+                    'total_stocks_analyzed': len(data),
+                    'total_nasdaq_100_stocks': 100,  # NASDAQ-100 has 100 stocks
                     'advancing_stocks': len([s for s in data if s.get('percent_change', 0) > 0]),
                     'declining_stocks': len([s for s in data if s.get('percent_change', 0) < 0]),
                     'average_change': sum(s.get('percent_change', 0) for s in data) / len(data),
                     'market_sentiment': 'Mixed',  # Default sentiment
                     'market_date': datetime.now().isoformat(),
                     'collection_timestamp': datetime.now().isoformat(),
-                    'data_source': source_name
+                    'data_source': source_name,
+                    'market_coverage': f"Analyzing {len(data)} representative NASDAQ-100 stocks"
                 }
                 
                 # Try to get market sentiment if available
@@ -302,6 +374,41 @@ class UnifiedDataCollector:
                         market_summary['market_sentiment'] = sentiment.get('market_sentiment', 'Mixed')
                     except:
                         pass
+                
+                # Get economic calendar data
+                try:
+                    economic_data = economic_calendar.get_comprehensive_calendar()
+                    market_summary['economic_calendar'] = economic_data
+                except Exception as e:
+                    logger.warning(f"Failed to get economic calendar data: {str(e)}")
+                    market_summary['economic_calendar'] = None
+                
+                # Get enhanced news analysis
+                try:
+                    enhanced_news = news_collector.get_enhanced_market_news(
+                        symbols=[stock['symbol'] for stock in data], 
+                        stock_data=data
+                    )
+                    market_summary['enhanced_news'] = enhanced_news
+                except Exception as e:
+                    logger.warning(f"Failed to get enhanced news analysis: {str(e)}")
+                    market_summary['enhanced_news'] = None
+                
+                # Get free news analysis as backup/enhancement
+                try:
+                    free_news = free_news_collector.get_comprehensive_free_news("NASDAQ stock market", 10)
+                    if free_news:
+                        market_summary['free_news'] = {
+                            'articles': free_news,
+                            'article_count': len(free_news),
+                            'sources': list(set(article.get('source', '') for article in free_news)),
+                            'timestamp': datetime.now().isoformat()
+                        }
+                    else:
+                        market_summary['free_news'] = None
+                except Exception as e:
+                    logger.warning(f"Failed to get free news: {str(e)}")
+                    market_summary['free_news'] = None
                 
                 result = {
                     'market_summary': market_summary,
@@ -336,14 +443,16 @@ class UnifiedDataCollector:
             losers = [stock for stock in cached_data if stock.get('percent_change', 0) < 0][:5]
             
             market_summary = {
-                'total_stocks': len(cached_data),
+                'total_stocks_analyzed': len(cached_data),
+                'total_nasdaq_100_stocks': 100,  # NASDAQ-100 has 100 stocks
                 'advancing_stocks': len([s for s in cached_data if s.get('percent_change', 0) > 0]),
                 'declining_stocks': len([s for s in cached_data if s.get('percent_change', 0) < 0]),
                 'average_change': sum(s.get('percent_change', 0) for s in cached_data) / len(cached_data),
                 'market_sentiment': 'Test Data',
                 'market_date': datetime.now().isoformat(),
                 'collection_timestamp': datetime.now().isoformat(),
-                'data_source': 'Cached/Test Data'
+                'data_source': 'Cached/Test Data',
+                'market_coverage': f"Analyzing {len(cached_data)} representative NASDAQ-100 stocks"
             }
             
             return {

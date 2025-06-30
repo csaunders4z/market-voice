@@ -6,6 +6,10 @@ from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
 from datetime import time
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -19,6 +23,8 @@ class Settings(BaseSettings):
     biztoc_api_key: str = Field(default="", env="BIZTOC_API_KEY")
     finnhub_api_key: str = Field(default="", env="FINNHUB_API_KEY")
     fmp_api_key: str = Field(default="", env="FMP_API_KEY")
+    newsdata_api_key: str = Field(default_factory=lambda: os.getenv("NEWSDATA_IO_API_KEY", ""), env="NEWSDATA_IO_API_KEY")  # NewsData.io API key
+    the_news_api_key: str = Field(default_factory=lambda: os.getenv("THE_NEWS_API_API_KEY", ""), env="THE_NEWS_API_API_KEY")  # The News API key
     
     # Data Collection Settings
     nasdaq_100_symbols: List[str] = Field(
@@ -119,6 +125,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"  # Allow extra fields from environment variables
 
 
 # Remove global settings instance

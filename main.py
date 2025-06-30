@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 from typing import Dict
+from dotenv import load_dotenv
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -19,15 +20,57 @@ from src.data_collection.stock_data import stock_collector
 from src.script_generation.script_generator import script_generator
 from src.content_validation.quality_controls import quality_controller
 from src.config.settings import get_settings
+from src.config.security import security_config
+from src.config.logging_config import secure_logging
 
+# Load environment variables
+load_dotenv()
 
 class MarketVoicesApp:
     """Main application class for Market Voices"""
     
     def __init__(self):
+        # Setup secure logging first
+        self._setup_secure_logging()
         self.logger = get_logger("MarketVoices")
+        
+        # Run security audit
+        self._run_security_audit()
+        
+        # Secure file permissions
+        self._secure_file_permissions()
+        
         self.output_dir = Path(get_settings().output_directory)
         self.output_dir.mkdir(exist_ok=True)
+        
+    def _setup_secure_logging(self):
+        """Setup secure logging with rotation and filtering"""
+        log_level = os.getenv("LOG_LEVEL", "INFO")
+        enable_file_logging = os.getenv("ENABLE_FILE_LOGGING", "true").lower() == "true"
+        
+        secure_logging.setup_logging(
+            log_level=log_level,
+            enable_file_logging=enable_file_logging
+        )
+        
+    def _run_security_audit(self):
+        """Run security audit before starting"""
+        audit_results = security_config.run_security_audit()
+        
+        if audit_results['recommendations']:
+            print("\n⚠️  SECURITY WARNINGS:")
+            for rec in audit_results['recommendations']:
+                print(f"  - {rec}")
+            print()
+        
+        # Log audit results
+        logger = get_logger("Security")
+        logger.info(f"Security audit completed - {len(audit_results['recommendations'])} issues found")
+        
+    def _secure_file_permissions(self):
+        """Secure file permissions"""
+        security_config.secure_env_file()
+        security_config.secure_output_directories()
         
     def run_daily_workflow(self) -> Dict:
         """Run the complete daily workflow"""
@@ -66,6 +109,10 @@ class MarketVoicesApp:
             # Step 4: Save outputs
             self.logger.info("Step 4: Saving outputs")
             self._save_outputs(market_data, script_data, quality_results)
+            
+            # Step 5: Cleanup old logs
+            self.logger.info("Step 5: Cleaning up old logs")
+            secure_logging.cleanup_old_logs(days=30)
             
             workflow_result['workflow_success'] = True
             self.logger.info("Daily workflow completed successfully")
@@ -166,12 +213,12 @@ class MarketVoicesApp:
             summary_lines.append("")
             summary_lines.append("CRITICAL ISSUES:")
             for issue in quality_results['issues'][:3]:  # Show first 3
-                summary_lines.append(f"- {issue}")
+                summary_lines.append(f"- {str(issue)}")
         
         summary_lines.append("")
         summary_lines.append("=" * 80)
         
-        return "\n".join(summary_lines)
+        return "\n".join(str(line) for line in summary_lines)
     
     def run_test_mode(self):
         """Run in test mode with sample data"""

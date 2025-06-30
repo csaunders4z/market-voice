@@ -87,15 +87,24 @@ class QualityController:
         
         # Add intro
         if 'intro' in script_data:
-            text_parts.append(script_data['intro'])
+            intro_text = script_data['intro']
+            if isinstance(intro_text, str):
+                text_parts.append(intro_text)
         
         # Add segments
         for segment in script_data.get('segments', []):
-            text_parts.append(segment.get('text', ''))
+            if isinstance(segment, dict):
+                segment_text = segment.get('text', '')
+                if isinstance(segment_text, str):
+                    text_parts.append(segment_text)
+            elif isinstance(segment, str):
+                text_parts.append(segment)
         
         # Add outro
         if 'outro' in script_data:
-            text_parts.append(script_data['outro'])
+            outro_text = script_data['outro']
+            if isinstance(outro_text, str):
+                text_parts.append(outro_text)
         
         return ' '.join(text_parts).lower()
     
@@ -201,17 +210,24 @@ class QualityController:
         word_count = len(all_text.split())
         target_runtime = script_data.get('estimated_runtime_minutes', 12)
         
-        # Rough estimate: 150 words per minute
-        expected_words = target_runtime * 150
-        tolerance = 0.2  # 20% tolerance
+        # New requirements: minimum 1440 words, with 70% devoted to stock coverage
+        min_words = 1440
+        expected_stock_coverage = min_words * 0.7  # 1000+ words for stock coverage
         
-        min_words = expected_words * (1 - tolerance)
-        max_words = expected_words * (1 + tolerance)
-        
-        if min_words <= word_count <= max_words:
-            result['passed_checks'].append(f"Content length is appropriate ({word_count} words for {target_runtime} minutes)")
+        if word_count >= min_words:
+            result['passed_checks'].append(f"Content length meets minimum requirement ({word_count} words >= {min_words})")
         else:
-            result['warnings'].append(f"Content length may need adjustment: {word_count} words for {target_runtime} minutes (expected {expected_words:.0f}±{tolerance*100:.0f}%)")
+            result['issues'].append(f"Content length below minimum: {word_count} words (required: {min_words})")
+        
+        # Check stock coverage (approximate - look for stock symbols and company names)
+        stock_indicators = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'ADBE', 'CRM']
+        stock_mentions = sum(all_text.count(indicator.lower()) for indicator in stock_indicators)
+        
+        # Rough estimate: if we have significant stock mentions, we likely have good coverage
+        if stock_mentions >= 10:  # At least 10 stock mentions across the script
+            result['passed_checks'].append("Stock coverage appears adequate")
+        else:
+            result['warnings'].append("Stock coverage may be insufficient - ensure 70% of content covers top 5 winners and losers")
         
         return result
     

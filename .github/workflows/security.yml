@@ -1,0 +1,69 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run dependency audit
+      run: |
+        pip-audit --format json --output pip-audit-results.json
+        echo "Dependency audit completed"
+        
+    - name: Run security audit
+      run: |
+        python security_audit.py
+        
+    - name: Run bandit security scan
+      run: |
+        bandit -r src/ -f json -o bandit-results.json || true
+        
+    - name: Upload security results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-audit-results
+        path: |
+          pip-audit-results.json
+          bandit-results.json
+          output/security_audit.json
+        retention-days: 30
+        
+    - name: Check for critical issues
+      run: |
+        if [ -f "pip-audit-results.json" ]; then
+          echo "Checking for critical vulnerabilities..."
+          python -c "
+import json
+with open('pip-audit-results.json') as f:
+    data = json.load(f)
+if data.get('vulnerabilities'):
+    print('CRITICAL: Vulnerabilities found!')
+    for vuln in data['vulnerabilities']:
+        print(f'- {vuln.get(\"package\", \"Unknown\")}: {vuln.get(\"description\", \"No description\")}')
+    exit(1)
+else:
+    print('✅ No vulnerabilities found')
+"
+        fi 

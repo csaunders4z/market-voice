@@ -1,0 +1,332 @@
+"""
+Free news sources for Market Voices
+Collects news from MarketWatch, Reuters, and other free financial sources
+"""
+import requests
+from typing import List, Dict, Optional
+from datetime import datetime, timedelta
+from loguru import logger
+import re
+from bs4 import BeautifulSoup
+import feedparser
+import time
+
+from ..config.settings import get_settings
+
+
+class FreeNewsCollector:
+    """Collects free news from various financial sources"""
+    
+    def __init__(self):
+        self.settings = get_settings()
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+    
+    def get_marketwatch_news(self, query: str = "NASDAQ", limit: int = 10) -> List[Dict]:
+        """Get news from MarketWatch"""
+        try:
+            # MarketWatch search URL
+            search_url = f"https://www.marketwatch.com/search?q={query}&tab=All"
+            
+            response = self.session.get(search_url, timeout=15)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            articles = []
+            
+            # Find article elements
+            article_elements = soup.find_all('div', class_='article__content')
+            
+            for element in article_elements[:limit]:
+                try:
+                    # Extract title
+                    title_elem = element.find('a', class_='link')
+                    title = title_elem.get_text(strip=True) if title_elem else ''
+                    
+                    # Extract URL
+                    url = title_elem.get('href') if title_elem else ''
+                    if url and not url.startswith('http'):
+                        url = f"https://www.marketwatch.com{url}"
+                    
+                    # Extract description
+                    desc_elem = element.find('p', class_='article__summary')
+                    description = desc_elem.get_text(strip=True) if desc_elem else ''
+                    
+                    if title and url:
+                        articles.append({
+                            'title': title,
+                            'description': description,
+                            'url': url,
+                            'source': 'MarketWatch',
+                            'published_at': datetime.now().isoformat(),
+                            'relevance_score': self._calculate_relevance_score({'title': title, 'description': description}, query)
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"Error parsing MarketWatch article: {str(e)}")
+                    continue
+            
+            logger.info(f"Retrieved {len(articles)} articles from MarketWatch")
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error fetching MarketWatch news: {str(e)}")
+            return []
+    
+    def get_reuters_news(self, query: str = "NASDAQ", limit: int = 10) -> List[Dict]:
+        """Get news from Reuters"""
+        try:
+            # Reuters RSS feed for business news
+            rss_url = "https://feeds.reuters.com/reuters/businessNews"
+            
+            feed = feedparser.parse(rss_url)
+            articles = []
+            
+            for entry in feed.entries[:limit]:
+                try:
+                    title = entry.get('title', '')
+                    description = entry.get('summary', '')
+                    url = entry.get('link', '')
+                    published_at = entry.get('published', '')
+                    
+                    # Filter for relevant articles
+                    if self._is_relevant_article(title, description, query):
+                        articles.append({
+                            'title': title,
+                            'description': description,
+                            'url': url,
+                            'source': 'Reuters',
+                            'published_at': published_at,
+                            'relevance_score': self._calculate_relevance_score({'title': title, 'description': description}, query)
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"Error parsing Reuters article: {str(e)}")
+                    continue
+            
+            logger.info(f"Retrieved {len(articles)} articles from Reuters")
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error fetching Reuters news: {str(e)}")
+            return []
+    
+    def get_yahoo_finance_news(self, query: str = "NASDAQ", limit: int = 10) -> List[Dict]:
+        """Get news from Yahoo Finance using their API"""
+        try:
+            import yfinance as yf
+            
+            # Get news for a broad market ticker
+            ticker = yf.Ticker("^IXIC")  # NASDAQ Composite
+            news = ticker.news
+            
+            articles = []
+            for item in news[:limit]:
+                try:
+                    content = item.get('content', {})
+                    title = content.get('title', '')
+                    summary = content.get('summary', '')
+                    description = content.get('description', '')
+                    url = content.get('canonicalUrl', '')
+                    published_at = content.get('pubDate', '')
+                    provider = content.get('provider', 'Yahoo Finance')
+                    
+                    # Use description if summary is empty
+                    full_description = summary if summary else description
+                    
+                    if title and self._is_relevant_article(title, full_description, query):
+                        articles.append({
+                            'title': title,
+                            'description': full_description,
+                            'url': url,
+                            'source': provider,
+                            'published_at': published_at,
+                            'relevance_score': self._calculate_relevance_score({'title': title, 'description': full_description}, query)
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"Error parsing Yahoo Finance article: {str(e)}")
+                    continue
+            
+            logger.info(f"Retrieved {len(articles)} articles from Yahoo Finance")
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error fetching Yahoo Finance news: {str(e)}")
+            return []
+    
+    def get_company_specific_news(self, symbol: str, limit: int = 5) -> List[Dict]:
+        """Get company-specific news from Yahoo Finance"""
+        try:
+            import yfinance as yf
+            
+            ticker = yf.Ticker(symbol)
+            news = ticker.news
+            
+            articles = []
+            for item in news[:limit]:
+                try:
+                    content = item.get('content', {})
+                    title = content.get('title', '')
+                    summary = content.get('summary', '')
+                    description = content.get('description', '')
+                    url = content.get('canonicalUrl', '')
+                    published_at = content.get('pubDate', '')
+                    provider = content.get('provider', 'Yahoo Finance')
+                    
+                    # Use description if summary is empty
+                    full_description = summary if summary else description
+                    
+                    if title:
+                        articles.append({
+                            'title': title,
+                            'description': full_description,
+                            'url': url,
+                            'source': provider,
+                            'published_at': published_at,
+                            'relevance_score': 10.0  # High relevance for company-specific news
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"Error parsing company news: {str(e)}")
+                    continue
+            
+            logger.info(f"Retrieved {len(articles)} company-specific articles for {symbol}")
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error fetching company news for {symbol}: {str(e)}")
+            return []
+    
+    def get_reuters_rss_news(self, limit: int = 10) -> List[Dict]:
+        """Get business news from Reuters RSS feed"""
+        try:
+            import feedparser
+            rss_url = "https://feeds.reuters.com/reuters/businessNews"
+            feed = feedparser.parse(rss_url)
+            articles = []
+            for entry in feed.entries[:limit]:
+                try:
+                    title = entry.get('title', '')
+                    description = entry.get('summary', '')
+                    url = entry.get('link', '')
+                    published_at = entry.get('published', '')
+                    
+                    articles.append({
+                        'title': title,
+                        'description': description,
+                        'url': url,
+                        'source': 'Reuters',
+                        'published_at': published_at,
+                        'relevance_score': self._calculate_relevance_score({'title': title, 'description': description}, 'business')
+                    })
+                except Exception as e:
+                    logger.debug(f"Error parsing Reuters RSS article: {str(e)}")
+                    continue
+            logger.info(f"Retrieved {len(articles)} articles from Reuters RSS")
+            return articles
+        except Exception as e:
+            logger.error(f"Error fetching Reuters RSS news: {str(e)}")
+            return []
+    
+    def get_marketwatch_rss_news(self, limit: int = 10) -> List[Dict]:
+        """Get business news from MarketWatch RSS feed (best effort)"""
+        try:
+            import feedparser
+            rss_url = "https://feeds.marketwatch.com/marketwatch/topstories/"
+            feed = feedparser.parse(rss_url)
+            articles = []
+            for entry in feed.entries[:limit]:
+                try:
+                    title = entry.get('title', '')
+                    description = entry.get('summary', '')
+                    url = entry.get('link', '')
+                    published_at = entry.get('published', '')
+                    
+                    articles.append({
+                        'title': title,
+                        'description': description,
+                        'url': url,
+                        'source': 'MarketWatch',
+                        'published_at': published_at,
+                        'relevance_score': self._calculate_relevance_score({'title': title, 'description': description}, 'business')
+                    })
+                except Exception as e:
+                    logger.debug(f"Error parsing MarketWatch RSS article: {str(e)}")
+                    continue
+            logger.info(f"Retrieved {len(articles)} articles from MarketWatch RSS")
+            return articles
+        except Exception as e:
+            logger.error(f"Error fetching MarketWatch RSS news: {str(e)}")
+            return []
+    
+    def get_comprehensive_free_news(self, query: str = "NASDAQ", limit: int = 15) -> List[Dict]:
+        """Get comprehensive news from all free sources"""
+        all_articles = []
+        
+        # Get news from multiple sources
+        sources = [
+            ('Yahoo Finance', self.get_yahoo_finance_news),
+            ('Reuters RSS', self.get_reuters_rss_news),
+            ('MarketWatch RSS', self.get_marketwatch_rss_news),
+        ]
+        
+        for source_name, source_func in sources:
+            try:
+                articles = source_func(limit // len(sources))
+                all_articles.extend(articles)
+                time.sleep(1)  # Be respectful to servers
+            except Exception as e:
+                logger.warning(f"Failed to get news from {source_name}: {str(e)}")
+                continue
+        
+        # Sort by relevance and recency
+        sorted_articles = sorted(all_articles, 
+                               key=lambda x: (x.get('relevance_score', 0), x.get('published_at', '')), 
+                               reverse=True)
+        
+        # Remove duplicates
+        unique_articles = self._remove_duplicate_articles(sorted_articles)
+        
+        logger.info(f"Retrieved {len(unique_articles)} unique articles from free sources")
+        return unique_articles[:limit]
+    
+    def _is_relevant_article(self, title: str, description: str, query: str) -> bool:
+        """Check if article is relevant to the query"""
+        query_terms = query.lower().split()
+        text = f"{title} {description}".lower()
+        return any(term in text for term in query_terms)
+    
+    def _calculate_relevance_score(self, article: Dict, query: str) -> float:
+        """Calculate relevance score for an article"""
+        score = 0.0
+        title = article.get('title', '').lower()
+        description = article.get('description', '').lower()
+        query_terms = query.lower().split()
+        
+        for term in query_terms:
+            if term in title:
+                score += 2.0
+            if term in description:
+                score += 1.0
+        
+        return score
+    
+    def _remove_duplicate_articles(self, articles: List[Dict]) -> List[Dict]:
+        """Remove duplicate articles based on title similarity"""
+        unique_articles = []
+        seen_titles = set()
+        
+        for article in articles:
+            title = article.get('title', '').lower()
+            if title not in seen_titles:
+                seen_titles.add(title)
+                unique_articles.append(article)
+        
+        return unique_articles
+
+
+# Global instance
+free_news_collector = FreeNewsCollector()
