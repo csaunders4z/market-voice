@@ -108,8 +108,8 @@ class Settings(BaseSettings):
     max_rate_limit_delay: float = Field(default=30.0, env="MAX_RATE_LIMIT_DELAY")  # Max delay in seconds
     
     # Collection Limits
-    max_symbols_per_collection: int = Field(default=50, env="MAX_SYMBOLS_PER_COLLECTION")  # Max symbols to collect
-    collection_timeout_minutes: int = Field(default=10, env="COLLECTION_TIMEOUT_MINUTES")  # Max collection time
+    max_symbols_per_collection: int = Field(default=200, env="MAX_SYMBOLS_PER_COLLECTION")  # Max symbols to collect (increased for expanded coverage)
+    collection_timeout_minutes: int = Field(default=15, env="COLLECTION_TIMEOUT_MINUTES")  # Max collection time (increased for larger datasets)
     
     # Logging
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
@@ -138,3 +138,9 @@ def get_settings():
     if _settings_instance is None:
         _settings_instance = Settings()
     return _settings_instance 
+
+def get_finnhub_api_key():
+    return os.getenv("FINNHUB_API_KEY", "")
+
+def get_alpha_vantage_api_key():
+    return os.getenv("ALPHA_VANTAGE_API_KEY", "") 

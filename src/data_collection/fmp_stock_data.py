@@ -45,19 +45,69 @@ class FMPStockDataCollector:
             self._use_fallback_symbols()
 
     def _use_fallback_symbols(self):
-        """Use a comprehensive fallback list of major NASDAQ-100 stocks"""
+        """Use a comprehensive fallback list of major NASDAQ-100 and S&P 500 stocks"""
         self.symbols = [
-            # Top 20 by market cap
+            # Top 20 by market cap (NASDAQ-100)
             "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "NFLX",
             "ADBE", "CRM", "PYPL", "INTC", "AMD", "QCOM", "AVGO", "TXN",
             "COST", "PEP", "CSCO", "TMUS",
+            
             # Additional major NASDAQ-100 stocks
             "ORLY", "ADP", "ISRG", "REGN", "VRTX", "GILD", "ABNB", "SNPS",
             "KLAC", "LRCX", "MU", "PANW", "CDNS", "MAR", "MELI", "ASML",
             "CHTR", "WDAY", "FTNT", "PAYX", "CTAS", "ROST", "ODFL", "FAST",
-            "BIIB", "ALGN", "DXCM", "IDXX", "VRSK", "CPRT", "PCAR", "EXC"
+            "BIIB", "ALGN", "DXCM", "IDXX", "VRSK", "CPRT", "PCAR", "EXC",
+            
+            # Major S&P 500 stocks (non-NASDAQ)
+            "JNJ", "PG", "UNH", "HD", "JPM", "BAC", "WMT", "MA", "V", "DIS",
+            "PFE", "ABT", "KO", "TMO", "ACN", "MRK", "NKE", "LLY", "DHR", "CVX",
+            "XOM", "VZ", "T", "CMCSA", "NEE", "PM", "RTX", "HON", "UPS",
+            "IBM", "LOW", "CAT", "GS", "MS", "AXP", "SPGI", "GE", "AMGN",
+            "UNP", "PLD", "SCHW", "DE", "LMT", "MDLZ", "ADI",
+            
+            # Additional S&P 500 tech and growth stocks
+            "ZM", "SHOP", "SQ", "ROKU", "SPOT", "UBER", "LYFT", "PINS", "SNAP",
+            "BYND", "PLTR", "COIN", "HOOD", "RBLX", "CRWD", "OKTA", "ZS",
+            "NET", "DDOG", "SNOW", "MDB", "ESTC", "TEAM", "ATVI", "EA", "TTWO",
+            "MTCH", "BMBL", "DASH", "U", "PATH", "RKT", "WISH", "CLOV",
+            "SENS", "NKLA", "WKHS", "IDEX", "HYLN", "SOLO", "CANO",
+            
+            # Financial sector (S&P 500)
+            "BRK.B", "WFC", "C", "USB", "PNC", "TFC", "COF", "BLK", "CME", "ICE",
+            "MCO", "FIS", "FISV", "GPN",
+            
+            # Healthcare sector (S&P 500)
+            "HUM", "ANTM", "CI", "AET", "CVS", "WBA", "MCK", "ABC",
+            "CAH", "HSIC", "DVA", "UHS", "HCA", "THC", "LVS", "MGM", "WYNN",
+            
+            # Consumer sector (S&P 500)
+            "TGT", "TJX", "ULTA", "SBUX", "MCD", "YUM", "CMG", "DPZ", "DRI", "HLT",
+            "FOX", "NWSA", "PARA", "WBD", "TTD", "MGNI",
+            
+            # Industrial sector (S&P 500)
+            "FDX", "BA", "NOC", "GD", "LHX", "TDG", "TXT", "EMR", "ETN", "ROK",
+            "DOV", "XYL", "AME", "FTV", "ITW", "PH", "MMM", "DOW",
+            "DD", "LIN", "APD", "FCX", "NEM", "GOLD", "NUE", "STLD", "X",
+            
+            # Energy sector (S&P 500)
+            "COP", "EOG", "SLB", "HAL", "BKR", "PSX", "VLO",
+            "MPC", "OXY", "PXD", "DVN", "HES", "APA", "MRO", "FANG", "CTRA",
+            "EQT", "RRC", "CHK", "SWN", "COG", "RIG", "DO", "HP", "NOV",
+            
+            # Utilities sector (S&P 500)
+            "DUK", "SO", "D", "AEP", "SRE", "XEL", "WEC", "DTE",
+            "ED", "EIX", "PEG", "AEE", "CMS", "CNP", "EXC", "FE",
+            "NI", "NRG", "PCG", "PNW", "PPL"
         ]
-        logger.info(f"Using comprehensive fallback list with {len(self.symbols)} NASDAQ-100 symbols")
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_symbols = []
+        for symbol in self.symbols:
+            if symbol not in seen:
+                seen.add(symbol)
+                unique_symbols.append(symbol)
+        self.symbols = unique_symbols
+        logger.info(f"Using comprehensive fallback list with {len(self.symbols)} unique NASDAQ-100 and S&P 500 symbols")
 
     def _calculate_rsi(self, prices: List[float], period: int = 14) -> float:
         """Calculate RSI (Relative Strength Index)"""
