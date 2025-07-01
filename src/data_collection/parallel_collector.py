@@ -20,6 +20,13 @@ import sys
 
 from ..config.settings import get_settings
 from ..utils.rate_limiter import RateLimiter
+from ..utils.error_recovery import (
+    error_recovery_manager, 
+    with_error_recovery, 
+    with_graceful_degradation,
+    CircuitBreakerConfig,
+    ErrorRecoveryManager
+)
 
 
 @dataclass
@@ -40,13 +47,23 @@ class ParallelCollector:
         self.batch_size = batch_size
         self.rate_limiter = RateLimiter()  # Fixed: no parameters needed
         self.memory_threshold = 2.0  # 2GB memory threshold
+        
+        # Error recovery setup
+        self.error_manager = error_recovery_manager
+        self.yahoo_circuit_breaker = self.error_manager.get_or_create_circuit_breaker(
+            "yahoo_finance",
+            CircuitBreakerConfig(failure_threshold=10, recovery_timeout=120)
+        )
+        
         self.collection_stats = {
             'total_processed': 0,
             'successful': 0,
             'failed': 0,
             'retries': 0,
             'start_time': None,
-            'end_time': None
+            'end_time': None,
+            'errors_handled': 0,
+            'circuit_breaker_trips': 0
         }
         
         # Thread-safe collections
@@ -128,30 +145,39 @@ class ParallelCollector:
             return None
     
     def _process_symbol(self, task: CollectionTask) -> Optional[Dict]:
-        """Process a single symbol with retry logic"""
+        """Process a single symbol with enhanced error recovery"""
         if self._should_stop_collection():
             return None
         
         try:
-            # Rate limiting using the existing RateLimiter
-            self.rate_limiter._wait_for_rate_limit("yahoo", 0.1)  # 0.1s delay between requests
+            # Use circuit breaker for Yahoo Finance API calls
+            def fetch_yahoo_data():
+                # Rate limiting using the existing RateLimiter
+                self.rate_limiter._wait_for_rate_limit("yahoo", 0.1)  # 0.1s delay between requests
+                
+                # Fetch data
+                ticker = yf.Ticker(task.symbol)
+                stock_data = self._minimal_stock_data(task.symbol, ticker)
+                return stock_data
             
-            # Fetch data
-            ticker = yf.Ticker(task.symbol)
-            stock_data = self._minimal_stock_data(task.symbol, ticker)
+            # Execute with circuit breaker protection
+            stock_data = self.yahoo_circuit_breaker.call(fetch_yahoo_data)
             
             if stock_data:
                 with self._lock:
                     self.collection_stats['successful'] += 1
                 return stock_data
             else:
-                # Retry logic
+                # Enhanced retry logic with error classification
                 if task.retry_count < task.max_retries:
                     task.retry_count += 1
                     with self._lock:
                         self.collection_stats['retries'] += 1
                     logger.info(f"Retrying {task.symbol} (attempt {task.retry_count}/{task.max_retries})")
-                    time.sleep(1)  # Brief delay before retry
+                    
+                    # Exponential backoff for retries
+                    delay = min(2 ** task.retry_count, 10)  # Cap at 10 seconds
+                    time.sleep(delay)
                     return self._process_symbol(task)
                 else:
                     with self._lock:
@@ -161,15 +187,46 @@ class ParallelCollector:
                     return None
                     
         except Exception as e:
-            logger.warning(f"Error processing {task.symbol}: {str(e)}")
-            # Handle rate limit errors
-            if "429" in str(e) or "rate limit" in str(e).lower():
-                self.rate_limiter._handle_rate_limit_error("yahoo", e)
+            # Enhanced error handling with classification and recovery
+            error_info = self.error_manager.handle_error(e, {
+                'symbol': task.symbol,
+                'retry_count': task.retry_count,
+                'function': '_process_symbol'
+            })
             
+            with self._lock:
+                self.collection_stats['errors_handled'] += 1
+                
+                # Check if circuit breaker was triggered
+                if self.yahoo_circuit_breaker.state.value == 'open':
+                    self.collection_stats['circuit_breaker_trips'] += 1
+            
+            # Handle specific error types
+            if error_info.error_type.value == 'rate_limit':
+                # Rate limit errors - use exponential backoff
+                if task.retry_count < task.max_retries:
+                    task.retry_count += 1
+                    delay = min(2 ** task.retry_count, 30)  # Longer delay for rate limits
+                    logger.info(f"Rate limit hit for {task.symbol}, retrying in {delay}s")
+                    time.sleep(delay)
+                    return self._process_symbol(task)
+            
+            elif error_info.error_type.value == 'network':
+                # Network errors - retry with shorter delays
+                if task.retry_count < task.max_retries:
+                    task.retry_count += 1
+                    logger.info(f"Network error for {task.symbol}, retrying...")
+                    time.sleep(2)
+                    return self._process_symbol(task)
+            
+            # For other errors, mark as failed
             with self._lock:
                 self.collection_stats['failed'] += 1
                 self._failed_symbols.append(task.symbol)
+            
+            logger.warning(f"Error processing {task.symbol}: {error_info.message} (type: {error_info.error_type.value})")
             return None
+            
         finally:
             # Clear ticker reference
             if 'ticker' in locals():
@@ -242,7 +299,9 @@ class ParallelCollector:
             'failed': 0,
             'retries': 0,
             'start_time': datetime.now(),
-            'end_time': None
+            'end_time': None,
+            'errors_handled': 0,
+            'circuit_breaker_trips': 0
         }
         
         self._collected_data = []
@@ -308,6 +367,13 @@ class ParallelCollector:
             logger.info(f"  Successful: {self.collection_stats['successful']}")
             logger.info(f"  Failed: {self.collection_stats['failed']}")
             logger.info(f"  Retries: {self.collection_stats['retries']}")
+            logger.info(f"  Errors handled: {self.collection_stats['errors_handled']}")
+            logger.info(f"  Circuit breaker trips: {self.collection_stats['circuit_breaker_trips']}")
+            
+            # Log error recovery summary
+            error_summary = self.error_manager.get_error_summary()
+            if error_summary['total_errors'] > 0:
+                logger.info(f"Error recovery summary: {error_summary}")
             
             if self._collected_data:
                 # Create market summary
@@ -334,8 +400,12 @@ class ParallelCollector:
                         'symbols_failed': self.collection_stats['failed'],
                         'retry_count': self.collection_stats['retries'],
                         'memory_usage_mb': final_memory,
-                        'memory_delta_mb': final_memory - initial_memory
-                    }
+                        'memory_delta_mb': final_memory - initial_memory,
+                        'errors_handled': self.collection_stats['errors_handled'],
+                        'circuit_breaker_trips': self.collection_stats['circuit_breaker_trips']
+                    },
+                    'error_recovery': self.error_manager.get_error_summary(),
+                    'circuit_breaker_status': self.yahoo_circuit_breaker.get_status()
                 }
                 
                 logger.info(f"Parallel data collection successful using Yahoo Finance (Parallel)")
