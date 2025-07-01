@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from io import StringIO
 from loguru import logger
 import time
+import re
 
 from ..config.settings import get_settings
 
@@ -174,23 +175,25 @@ class SymbolLoader:
             logger.error(f"Error loading NASDAQ-100 from Nasdaq: {str(e)}")
             return []
     
+    def _redact_apikey(self, url: str) -> str:
+        """Redact the apikey query parameter in a URL for logging"""
+        return re.sub(r'(apikey=)[^&]+', r'\1[REDACTED]', url)
+
     def _load_nasdaq_100_from_fmp(self) -> List[str]:
         """Load NASDAQ-100 symbols from FMP API"""
         try:
             fmp_api_key = self.settings.fmp_api_key
             if not fmp_api_key or fmp_api_key == "DUMMY":
                 return []
-            
             url = f"https://financialmodelingprep.com/api/v3/nasdaq_constituent?apikey={fmp_api_key}"
             response = requests.get(url, timeout=10)
             response.raise_for_status()
-            
             data = response.json()
             symbols = [item.get('symbol', '') for item in data if item.get('symbol')]
             return symbols
-            
         except Exception as e:
-            logger.error(f"Error loading NASDAQ-100 from FMP: {str(e)}")
+            redacted_url = self._redact_apikey(url)
+            logger.error(f"Error loading NASDAQ-100 from FMP: {str(e)} | URL: {redacted_url}")
             return []
     
     def _load_sp_500_from_wikipedia(self) -> List[str]:

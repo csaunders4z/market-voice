@@ -8,6 +8,7 @@ from loguru import logger
 import os
 import numpy as np
 import time
+import re
 
 from ..config.settings import get_settings
 from ..utils.rate_limiter import api_rate_limiter, rate_limiter
@@ -21,6 +22,10 @@ class FMPStockDataCollector:
         self.symbols = []  # Will be populated dynamically
         self.base_url = "https://financialmodelingprep.com/api/v3"
         self._load_nasdaq_100_symbols()
+
+    def _redact_apikey(self, url: str) -> str:
+        """Redact the apikey query parameter in a URL for logging"""
+        return re.sub(r'(apikey=)[^&]+', r'\1[REDACTED]', url)
 
     @api_rate_limiter.fmp_request
     def _load_nasdaq_100_symbols(self):
@@ -40,7 +45,8 @@ class FMPStockDataCollector:
                 self._use_fallback_symbols()
                 
         except Exception as e:
-            logger.error(f"Error loading NASDAQ-100 symbols: {str(e)}")
+            redacted_url = self._redact_apikey(url)
+            logger.error(f"Error loading NASDAQ-100 symbols: {str(e)} | URL: {redacted_url}")
             logger.info("Using fallback symbol list")
             self._use_fallback_symbols()
 
@@ -716,6 +722,7 @@ class FMPStockDataCollector:
             }
             
         except Exception as e:
+            redacted_url = self._redact_apikey(url)
             error_str = str(e)
             if '429' in error_str or 'Too Many Requests' in error_str:
                 logger.warning(f"Rate limit hit for {symbol}: {error_str}")
@@ -724,7 +731,7 @@ class FMPStockDataCollector:
             elif '500' in error_str or '502' in error_str or '503' in error_str:
                 logger.error(f"Server error for {symbol}: {error_str}")
             else:
-                logger.error(f"Error fetching FMP data for {symbol}: {error_str}")
+                logger.error(f"Error fetching FMP data for {symbol}: {error_str} | URL: {redacted_url}")
             return None
 
     def collect_data(self) -> List[Dict]:

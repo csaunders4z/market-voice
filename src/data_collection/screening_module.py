@@ -96,6 +96,11 @@ class ScreeningModule:
             'timestamp': datetime.now().isoformat()
         }
     
+    def _redact_apikey(self, url: str) -> str:
+        """Redact the apikey query parameter in a URL for logging"""
+        import re
+        return re.sub(r'(apikey=)[^&]+', r'\1[REDACTED]', url)
+    
     def _screen_with_yahoo_finance(self, symbols: List[str]) -> Dict:
         """Screen symbols using Yahoo Finance (fastest and most reliable)"""
         logger.info("Screening with Yahoo Finance")
@@ -229,7 +234,9 @@ class ScreeningModule:
                 }
                 
             except Exception as e:
-                logger.debug(f"Failed to screen {symbol} with Alpha Vantage: {str(e)}")
+                url = f"{base_url}?function=GLOBAL_QUOTE&symbol={symbol}&apikey={av_api_key}"
+                redacted_url = self._redact_apikey(url)
+                logger.error(f"Alpha Vantage error for {symbol}: {str(e)} | URL: {redacted_url}")
                 return None
         
         # Process symbols in batches
@@ -311,7 +318,8 @@ class ScreeningModule:
                 }
                 
             except Exception as e:
-                logger.debug(f"Failed to screen {symbol} with FMP: {str(e)}")
+                redacted_url = self._redact_apikey(url)
+                logger.error(f"FMP error for {symbol}: {str(e)} | URL: {redacted_url}")
                 return None
         
         # Process symbols in batches
