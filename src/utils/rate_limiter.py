@@ -108,10 +108,13 @@ class RateLimiter:
         return decorator
     
     def batch_process(self, items: List[Any], batch_size: int, batch_delay: float, 
-                     process_func: Callable, api_name: str = "unknown") -> List[Any]:
-        """Process items in batches with rate limiting"""
+                     process_func: Callable, api_name: str = "unknown", 
+                     max_consecutive_errors: int = 5) -> List[Any]:
+        """Process items in batches with rate limiting and early termination on persistent errors"""
         results = []
         total_batches = (len(items) + batch_size - 1) // batch_size
+        consecutive_errors = 0
+        rate_limit_errors = 0
         
         logger.info(f"Processing {len(items)} items in {total_batches} batches for {api_name}")
         
@@ -122,17 +125,47 @@ class RateLimiter:
             logger.debug(f"Processing batch {batch_num}/{total_batches} for {api_name} ({len(batch)} items)")
             
             # Process batch
+            batch_success_count = 0
             for item in batch:
                 try:
                     result = process_func(item)
                     if result is not None:
                         results.append(result)
+                        batch_success_count += 1
+                        consecutive_errors = 0  # Reset on success
+                    else:
+                        consecutive_errors += 1
+                        rate_limit_errors += 1
                 except Exception as e:
-                    logger.error(f"Error processing {item} in {api_name}: {str(e)}")
+                    consecutive_errors += 1
+                    error_str = str(e)
+                    
+                    # Check for rate limiting errors
+                    if "429" in error_str or "rate limit" in error_str.lower() or "too many requests" in error_str.lower():
+                        rate_limit_errors += 1
+                        logger.warning(f"Rate limit error for {item} in {api_name}: {error_str}")
+                    else:
+                        logger.error(f"Error processing {item} in {api_name}: {error_str}")
+                    
                     self._handle_rate_limit_error(api_name, e)
+                
+                # Check if we should stop due to persistent errors
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.error(f"Stopping {api_name} collection after {consecutive_errors} consecutive errors")
+                    break
+                
+                # Check if we should stop due to rate limiting
+                if rate_limit_errors >= max_consecutive_errors:
+                    logger.error(f"Stopping {api_name} collection after {rate_limit_errors} rate limit errors")
+                    break
+            
+            # If entire batch failed, stop processing
+            if batch_success_count == 0 and len(batch) > 0:
+                logger.error(f"Entire batch {batch_num} failed for {api_name}. Stopping collection.")
+                break
             
             # Delay between batches (except for last batch)
-            if i + batch_size < len(items):
+            if i + batch_size < len(items) and consecutive_errors < max_consecutive_errors:
                 logger.debug(f"Waiting {batch_delay}s between batches for {api_name}")
                 time.sleep(batch_delay)
         

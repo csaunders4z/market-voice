@@ -341,17 +341,47 @@ class UnifiedDataCollector:
         
         logger.info(f"Collecting data for {len(symbols)} symbols")
         
+        # Track critical errors
+        critical_errors = []
+        
         # Try each source in order
         for source_name, source_func in self.sources:
             success, data, message = source_func(symbols)
             
+            # Check for critical API errors
+            if not success and any(error_code in message for error_code in ['429', '401', '403', '500', '502', '503']):
+                critical_errors.append(f"{source_name}: {message}")
+                logger.error(f"Critical API error from {source_name}: {message}")
+                
+                # If we have critical errors from multiple sources, pause collection
+                if len(critical_errors) >= 2:
+                    logger.error("Multiple critical API errors detected. Pausing data collection.")
+                    return {
+                        'collection_success': False,
+                        'error': f'Critical API errors detected: {", ".join(critical_errors)}. Please check API keys and rate limits.',
+                        'data_source': 'Failed - API Errors',
+                        'critical_errors': critical_errors,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                continue
+            
             if success and data:
+                # Check if we have sufficient data for meaningful analysis
+                if len(data) < 5:
+                    logger.warning(f"Insufficient data from {source_name}: only {len(data)} stocks collected")
+                    continue
+                
                 # Sort by percent change
                 data.sort(key=lambda x: x.get('percent_change', 0), reverse=True)
                 
                 # Get top winners and losers
                 winners = [stock for stock in data if stock.get('percent_change', 0) > 0][:5]
                 losers = [stock for stock in data if stock.get('percent_change', 0) < 0][:5]
+                
+                # Ensure we have enough data for analysis
+                if len(winners) < 3 or len(losers) < 1:
+                    logger.warning(f"Insufficient winners/losers from {source_name}: {len(winners)} winners, {len(losers)} losers")
+                    continue
                 
                 # Create market summary
                 market_summary = {
@@ -426,10 +456,15 @@ class UnifiedDataCollector:
         # If all sources fail, handle based on production mode
         if production_mode:
             logger.error("All data sources failed in production mode")
+            error_message = 'All data sources failed - cannot generate production content without real data'
+            if critical_errors:
+                error_message += f'. Critical errors: {", ".join(critical_errors)}'
+            
             return {
                 'collection_success': False,
-                'error': 'All data sources failed - cannot generate production content without real data',
+                'error': error_message,
                 'data_source': 'Failed',
+                'critical_errors': critical_errors,
                 'timestamp': datetime.now().isoformat()
             }
         else:

@@ -55,6 +55,7 @@ class SymbolLoader:
         
         # Try multiple sources in order of preference
         sources = [
+            self._load_nasdaq_100_from_stockanalysis,
             self._load_nasdaq_100_from_wikipedia,
             self._load_nasdaq_100_from_nasdaq,
             self._load_nasdaq_100_from_fmp
@@ -100,6 +101,39 @@ class SymbolLoader:
         # Fallback to hardcoded list
         logger.warning("All sources failed, using fallback S&P 500 list")
         self._use_sp_500_fallback()
+    
+    def _load_nasdaq_100_from_stockanalysis(self) -> List[str]:
+        """Load NASDAQ-100 symbols from StockAnalysis.com (reliable backup source)"""
+        try:
+            logger.info("Loading NASDAQ-100 from StockAnalysis.com...")
+            
+            url = "https://stockanalysis.com/list/nasdaq-100-stocks/"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            # Parse the HTML table
+            tables = pd.read_html(StringIO(response.text))
+            
+            # Find the table with NASDAQ-100 constituents
+            for table in tables:
+                if 'Symbol' in table.columns:
+                    symbols = table['Symbol'].dropna().tolist()
+                    # Clean symbols (remove any non-alphabetic characters and convert to uppercase)
+                    symbols = [str(s).strip().upper() for s in symbols if str(s).strip().isalpha()]
+                    if len(symbols) >= 90:  # Should have around 100 symbols
+                        logger.info(f"Successfully parsed {len(symbols)} symbols from StockAnalysis.com")
+                        return symbols
+            
+            logger.warning("Could not find NASDAQ-100 table in StockAnalysis.com")
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error loading NASDAQ-100 from StockAnalysis.com: {str(e)}")
+            return []
     
     def _load_nasdaq_100_from_wikipedia(self) -> List[str]:
         """Load NASDAQ-100 symbols from Wikipedia"""

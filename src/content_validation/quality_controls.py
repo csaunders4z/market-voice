@@ -109,10 +109,10 @@ class QualityController:
         return ' '.join(text_parts).lower()
     
     def _check_phrase_repetitions(self, script_data: Dict, all_text: str) -> Dict:
-        """Check for repetitive phrases"""
+        """Check for repetitive phrases with enhanced detection"""
         result = {'issues': [], 'warnings': [], 'passed_checks': []}
         
-        # Find phrases of 3+ words
+        # Check for 3+ word phrases
         words = all_text.split()
         phrases = []
         
@@ -125,10 +125,36 @@ class QualityController:
         repeated_phrases = {phrase: count for phrase, count in phrase_counts.items() 
                           if count > self.max_phrase_repetitions}
         
-        if repeated_phrases:
-            result['issues'].append(f"Found {len(repeated_phrases)} phrases repeated more than {self.max_phrase_repetitions} times")
-            for phrase, count in list(repeated_phrases.items())[:5]:  # Show first 5
+        # Check for 2-word phrases (more strict)
+        two_word_phrases = []
+        for i in range(len(words) - 1):
+            phrase = ' '.join(words[i:i+2])
+            two_word_phrases.append(phrase)
+        
+        two_word_counts = Counter(two_word_phrases)
+        repeated_two_words = {phrase: count for phrase, count in two_word_counts.items() 
+                            if count > 4}  # Allow up to 4 repetitions for 2-word phrases
+        
+        # Check for single word overuse (excluding common words)
+        common_words = {'the', 'and', 'to', 'of', 'a', 'in', 'is', 'it', 'you', 'that', 'he', 'was', 'for', 'on', 'are', 'as', 'with', 'his', 'they', 'at', 'be', 'this', 'have', 'from', 'or', 'one', 'had', 'by', 'word', 'but', 'not', 'what', 'all', 'were', 'we', 'when', 'your', 'can', 'said', 'there', 'use', 'an', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her', 'would', 'make', 'like', 'into', 'him', 'time', 'two', 'more', 'go', 'no', 'way', 'could', 'my', 'than', 'first', 'been', 'call', 'who', 'its', 'now', 'find', 'long', 'down', 'day', 'did', 'get', 'come', 'made', 'may', 'part'}
+        word_counts = Counter(words)
+        overused_words = {word: count for word, count in word_counts.items() 
+                         if word.lower() not in common_words and count > 8}
+        
+        total_issues = len(repeated_phrases) + len(repeated_two_words) + len(overused_words)
+        
+        if total_issues > 0:
+            result['issues'].append(f"Found {total_issues} repetition issues")
+            
+            # Add specific warnings
+            for phrase, count in list(repeated_phrases.items())[:3]:
                 result['warnings'].append(f"'{phrase}' repeated {count} times")
+            
+            for phrase, count in list(repeated_two_words.items())[:3]:
+                result['warnings'].append(f"'{phrase}' repeated {count} times")
+            
+            for word, count in list(overused_words.items())[:3]:
+                result['warnings'].append(f"'{word}' used {count} times")
         else:
             result['passed_checks'].append("No excessive phrase repetitions found")
         

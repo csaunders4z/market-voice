@@ -156,7 +156,7 @@ MARKET OVERVIEW:
 """
         
         prompt = f"""
-You are writing a script for "Market Voices," a daily NASDAQ-100 analysis show targeting educated viewers (college graduate/MBA level).
+You are writing a professional financial news script for "Market Voices," a daily NASDAQ-100 analysis show. Create a comprehensive, engaging script that explains market movements with specific details and analysis.
 
 HOSTS:
 - {lead_host_info['name']} ({lead_host_info['age']}): {lead_host_info['personality']}
@@ -171,15 +171,26 @@ TOP 5 WINNERS (with detailed analysis):
 TOP 5 LOSERS (with detailed analysis):
 {losers_text}
 
-CRITICAL REQUIREMENTS:
-1. The script must be at least 1440 words in total. THIS IS A HARD REQUIREMENT.
-2. There must be 10 separate segments: one for each of the top 5 winners and one for each of the top 5 losers. Each of these 10 segments must be at least 120 words. DO NOT MOVE TO THE NEXT SEGMENT UNTIL THE WORD COUNT IS MET.
-3. At least 70% of the script (1000+ words) must be devoted to these 10 stock segments.
-4. The intro, market overview, market sentiment, and outro should fill out the rest of the word count (each 100–200 words).
-5. {lead_host_info['name']} leads and speaks first, but the supporting host MUST greet the audience and participate in the intro banter. The intro must always include both hosts greeting the audience and a short exchange about the day's market mood or a headline before diving in.
-6. Speaking time must be 45-55% split between hosts (strict requirement).
-7. Use professional financial news tone - avoid AI-generated language patterns.
-8. VARY YOUR LANGUAGE - avoid repeating the same phrases and sentence structures.
+CRITICAL REQUIREMENTS - READ CAREFULLY:
+1. ABSOLUTE MINIMUM 1440 WORDS TOTAL - This is non-negotiable
+2. You MUST write EXACTLY 10 stock segments (5 winners + 5 losers)
+3. Each stock segment MUST be 100-120 words minimum
+4. Total stock segments must be 1000-1200 words
+5. Intro: 200 words, Market Overview: 150 words, Market Sentiment: 100 words, Outro: 150 words
+6. Speaking time: 45-55% split between hosts
+7. Use varied language - avoid repetitive phrases like "we will", "let's look at", etc.
+8. Include specific data points, percentages, and technical indicators
+9. Reference actual news events and analyst actions
+10. Professional financial news tone
+
+STOCK SEGMENT REQUIREMENTS (100-120 words each):
+For each stock, you MUST include:
+- Host introduction and stock identification
+- Price movement and volume analysis with specific percentages
+- Specific catalysts (news, earnings, analyst actions, sector trends)
+- Technical analysis (RSI, MACD, support/resistance if available)
+- Market context and sector impact
+- Forward-looking analysis and what to watch for
 
 MOST IMPORTANT: EXPLAIN WHY EACH STOCK MOVED THE WAY IT DID
 For each stock segment, you MUST explain:
@@ -199,32 +210,41 @@ If you lack specific information about why a stock moved, use available data to 
 - Upcoming catalysts (earnings, product launches, etc.)
 - Macroeconomic factors (Fed policy, economic data, etc.)
 
-IMPORTANT: DO NOT WRITE OUTLINES OR DESCRIPTIONS OF WHAT YOU'LL COVER. WRITE THE ACTUAL ANALYSIS CONTENT.
+CRITICAL: DO NOT WRITE OUTLINES OR DESCRIPTIONS. WRITE THE ACTUAL ANALYSIS CONTENT.
+CRITICAL: ENSURE EACH STOCK SEGMENT IS 100-120 WORDS MINIMUM.
+CRITICAL: ENSURE TOTAL SCRIPT IS 1440+ WORDS.
 
 WORD COUNT BREAKDOWN (MINIMUM 1440 WORDS TOTAL):
-- Intro: 100-200 words
-- Market Overview: 100-200 words
-- Top 5 Winners: 5 segments, 120+ words each (600+ words total)
-- Top 5 Losers: 5 segments, 120+ words each (600+ words total)
-- Market Sentiment: 100-200 words
-- Outro: 100-200 words
+- Intro: 200 words (both hosts greeting and market mood discussion)
+- Market Overview: 150 words (brief market summary and key themes)
+- Top 5 Winners: 5 segments, 100-120 words each (500-600 words total)
+- Top 5 Losers: 5 segments, 100-120 words each (500-600 words total)
+- Market Sentiment: 100 words (overall market sentiment analysis)
+- Outro: 150 words (closing remarks and preview of next session)
 
 CONTENT STRUCTURE (JSON):
 {{
-    "intro": "Both hosts greet and chat (100-200 words)",
-    "market_overview": "Market and economic context (100-200 words)",
+    "intro": "Both hosts greet and chat about market mood (200 words)",
+    "market_overview": "Market and economic context (150 words)",
     "winner_segments": [
-        {{"host": "{lead_host}", "stock": "WINNER1", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{supporting_host}", "stock": "WINNER2", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{lead_host}", "stock": "WINNER3", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{supporting_host}", "stock": "WINNER4", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{lead_host}", "stock": "WINNER5", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}}
+        {{"host": "{lead_host}", "stock": "WINNER1", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{supporting_host}", "stock": "WINNER2", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{lead_host}", "stock": "WINNER3", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{supporting_host}", "stock": "WINNER4", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{lead_host}", "stock": "WINNER5", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}}
     ],
     "loser_segments": [
-        {{"host": "{supporting_host}", "stock": "LOSER1", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{lead_host}", "stock": "LOSER2", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{supporting_host}", "stock": "LOSER3", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
-        {{"host": "{lead_host}", "stock": "LOSER4", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}},
+        {{"host": "{supporting_host}", "stock": "LOSER1", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{lead_host}", "stock": "LOSER2", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{supporting_host}", "stock": "LOSER3", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{lead_host}", "stock": "LOSER4", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
+        {{"host": "{supporting_host}", "stock": "LOSER5", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}}
+    ],
+    "market_sentiment": "Overall market sentiment analysis (100 words)",
+    "outro": "Closing remarks and preview of next session (150 words)"
+}}
+
+FINAL REMINDER: You MUST write 1440+ words total with 10 stock segments of 100-120 words each. Focus on creating engaging, informative content that explains WHY stocks moved the way they did, not just WHAT happened. Use specific data points, technical indicators, and news events to provide comprehensive analysis.
         {{"host": "{supporting_host}", "stock": "LOSER5", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}}
     ],
     "market_sentiment": "Market sentiment and institutional activity (100-200 words)",
@@ -252,6 +272,20 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         logger.info("Starting script generation")
         
         try:
+            # Check if we have sufficient data for meaningful script generation
+            winners = market_data.get('winners', [])
+            losers = market_data.get('losers', [])
+            
+            if len(winners) < 3 or len(losers) < 1:
+                logger.warning(f"Insufficient data for script generation: {len(winners)} winners, {len(losers)} losers")
+                return {
+                    'generation_success': False,
+                    'error': f'Insufficient market data for script generation. Need at least 3 winners and 1 loser. Got {len(winners)} winners and {len(losers)} losers.',
+                    'market_date': datetime.now().isoformat(),
+                    'lead_host': 'unknown',
+                    'estimated_runtime_minutes': 0
+                }
+            
             # Check if we're in test mode
             if os.getenv("TEST_MODE") == "1":
                 logger.info("Running in test mode - generating mock script")
