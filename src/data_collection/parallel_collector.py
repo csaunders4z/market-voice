@@ -272,7 +272,7 @@ class ParallelCollector:
             priority = 1  # Default priority
             if symbol in ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']:  # High priority symbols
                 priority = 10
-            elif symbol in ['META', 'TSLA', 'BRK.B', 'LLY', 'UNH']:  # Medium priority
+            elif symbol in ['META', 'TSLA', 'BRK-B', 'LLY', 'UNH']:  # Medium priority
                 priority = 5
             
             task = CollectionTask(symbol=symbol, priority=priority)

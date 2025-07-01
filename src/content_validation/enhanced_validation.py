@@ -26,16 +26,16 @@ class EnhancedValidator:
         
         # Sector definitions
         self.sector_definitions = {
-            'Technology': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'ADBE', 'CRM', 'PYPL', 'INTC', 'AMD', 'QCOM', 'AVGO', 'TXN', 'CSCO', 'ORCL', 'NOW', 'ADSK', 'ANSS'],
-            'Healthcare': ['JNJ', 'UNH', 'PFE', 'ABBV', 'TMO', 'DHR', 'ABT', 'BMY', 'GILD', 'AMGN', 'ISRG', 'SYK', 'REGN', 'VRTX', 'BIIB', 'ALGN', 'DXCM', 'IDXX'],
-            'Financial': ['BRK.B', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK', 'C', 'AXP', 'USB', 'PNC', 'TFC', 'COF', 'SCHW'],
-            'Consumer': ['WMT', 'PG', 'KO', 'PEP', 'COST', 'HD', 'NKE', 'PM', 'TGT', 'LOW', 'SBUX', 'MCD', 'YUM', 'TJX', 'ROST'],
-            'Energy': ['XOM', 'CVX', 'COP', 'EOG', 'SLB', 'PSX', 'VLO', 'MPC', 'OKE', 'KMI'],
-            'Industrial': ['UNP', 'CAT', 'GE', 'LMT', 'RTX', 'HON', 'UPS', 'FDX', 'EMR', 'ETN'],
-            'Communication': ['T', 'VZ', 'CMCSA', 'CHTR', 'TMUS', 'DISH', 'ViacomCBS', 'FOX', 'NWSA'],
-            'Materials': ['LIN', 'APD', 'FCX', 'NEM', 'DOW', 'DD', 'ECL', 'BLL', 'ALB', 'NUE'],
-            'Real Estate': ['PLD', 'AMT', 'CCI', 'EQIX', 'DLR', 'PSA', 'O', 'SPG', 'EQR', 'AVB'],
-            'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'XEL', 'SRE', 'DTE', 'WEC']
+            'Technology': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'NFLX', 'ADBE', 'CRM', 'PYPL', 'INTC', 'AMD', 'QCOM', 'AVGO', 'TXN'],
+            'Healthcare': ['JNJ', 'PFE', 'UNH', 'ABBV', 'TMO', 'DHR', 'ABT', 'BMY', 'AMGN', 'ISRG', 'REGN', 'VRTX', 'GILD', 'BIIB', 'ALGN', 'DXCM', 'IDXX'],
+            'Financial': ['BRK-B', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK', 'C', 'AXP', 'USB', 'PNC', 'TFC', 'COF', 'SCHW'],
+            'Consumer': ['WMT', 'HD', 'COST', 'PG', 'KO', 'PEP', 'NKE', 'SBUX', 'TJX', 'ROST', 'LOW', 'TGT', 'DG', 'ULTA'],
+            'Energy': ['XOM', 'CVX', 'COP', 'EOG', 'SLB', 'PSX', 'VLO', 'MPC', 'OXY', 'HAL'],
+            'Industrial': ['BA', 'CAT', 'UNP', 'RTX', 'HON', 'UPS', 'FDX', 'LMT', 'SYK', 'GE', 'EMR', 'ITW', 'MMM', 'DE'],
+            'Communication': ['TMUS', 'VZ', 'T', 'CMCSA', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA'],
+            'Materials': ['LIN', 'APD', 'ECL', 'FCX', 'NEM', 'DOW', 'DD', 'CTVA', 'BLL', 'VMC'],
+            'Real Estate': ['PLD', 'AMT', 'CCI', 'EQIX', 'DLR', 'PSA', 'SPG', 'O', 'VICI', 'WELL'],
+            'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP', 'XEL', 'WEC', 'DTE', 'EIX', 'PEG']
         }
         
         # Market cap categories
@@ -49,8 +49,8 @@ class EnhancedValidator:
         
         # Geographic regions
         self.geographic_regions = {
-            'US': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'LLY', 'UNH'],
-            'International': ['ASML', 'NVO', 'SAP', 'NVS', 'TM', 'TSM', 'BABA', 'JD', 'TCEHY', 'PDD']
+            'US': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'LLY', 'UNH'],
+            'International': ['ASML', 'AZN', 'MELI', 'SHOP', 'BABA', 'JD', 'PDD', 'TCEHY', 'NFLX', 'ADBE']
         }
         
     def run_comprehensive_validation(self, symbols: List[str] = None) -> Dict[str, Any]:

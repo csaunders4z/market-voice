@@ -153,7 +153,7 @@ def run_weekly_maintenance():
         # Check for missing critical symbols
         critical_symbols = {
             "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "NFLX",
-            "BRK.B", "LLY", "UNH", "V", "XOM", "JNJ", "WMT", "JPM"
+            "BRK-B", "LLY", "UNH", "V", "XOM", "JNJ", "WMT", "JPM"
         }
         
         missing_critical = critical_symbols - all_symbols

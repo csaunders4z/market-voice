@@ -41,7 +41,7 @@ class ScreeningModule:
                 "MRK", "NKE", "LLY", "DHR", "CVX", "XOM", "VZ", "T", "CMCSA",
                 "NEE", "PM", "RTX", "HON", "UPS", "IBM", "LOW", "CAT", "GS",
                 "MS", "AXP", "SPGI", "GE", "AMGN", "UNP", "PLD", "SCHW", "DE",
-                "LMT", "MDLZ", "ADI", "BRK.B", "WFC", "C", "USB", "PNC", "TFC",
+                "LMT", "MDLZ", "ADI", "BRK-B", "WFC", "C", "USB", "PNC", "TFC",
                 "COF", "BLK", "CME", "ICE", "MCO", "FIS", "FISV", "GPN", "HUM",
                 "ANTM", "CI", "AET", "CVS", "WBA", "MCK", "ABC", "CAH", "HSIC",
                 "DVA", "UHS", "HCA", "THC", "LVS", "MGM", "WYNN", "TGT", "TJX",

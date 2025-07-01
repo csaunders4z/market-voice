@@ -44,7 +44,7 @@ class FMPStockDataCollector:
             logger.info("Using fallback symbol list")
             self._use_fallback_symbols()
 
-        def _use_fallback_symbols(self):
+    def _use_fallback_symbols(self):
         """Use a comprehensive fallback list of current S&P 500 and NASDAQ-100 stocks"""
         self.symbols = [
             "MSFT",
@@ -83,7 +83,7 @@ class FMPStockDataCollector:
             "SLB",
             "ECL",
             "UAL",
-            "BRK.B",
+            "BRK-B",
             "T",
             "CF",
             "REGN",

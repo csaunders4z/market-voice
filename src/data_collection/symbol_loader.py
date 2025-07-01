@@ -253,7 +253,7 @@ class SymbolLoader:
     def _use_sp_500_fallback(self):
         """Use fallback S&P 500 symbols (top 100 by market cap)"""
         self.sp_500_symbols = [
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "BRK.B", "LLY",
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "BRK-B", "LLY",
             "TSLA", "UNH", "V", "XOM", "JNJ", "WMT", "JPM", "PG", "MA",
             "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "AVGO", "COST",
             "PFE", "TMO", "BAC", "ACN", "DHR", "VZ", "ADBE", "WFC", "CRM",
@@ -359,7 +359,7 @@ class SymbolLoader:
         
         # Define critical S&P 500 stocks (top 50 by market cap)
         critical_sp500 = {
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "BRK.B", "LLY",
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "BRK-B", "LLY",
             "TSLA", "UNH", "V", "XOM", "JNJ", "WMT", "JPM", "PG", "MA",
             "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "AVGO", "COST",
             "PFE", "TMO", "BAC", "ACN", "DHR", "VZ", "ADBE", "WFC", "CRM",
@@ -392,7 +392,7 @@ class SymbolLoader:
         
         # Top 100 stocks by market cap (approximate)
         top_100_market_cap = {
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "BRK.B", "LLY",
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "BRK-B", "LLY",
             "TSLA", "UNH", "V", "XOM", "JNJ", "WMT", "JPM", "PG", "MA",
             "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "AVGO", "COST",
             "PFE", "TMO", "BAC", "ACN", "DHR", "VZ", "ADBE", "WFC", "CRM",

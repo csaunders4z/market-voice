@@ -38,7 +38,12 @@ class ScriptGenerator:
         losers = market_data.get('losers', [])
         summary = market_data.get('market_summary', {})
         
-        # Format winners and losers with enhanced data
+        # Get news data for integration
+        news_data = market_data.get('news_data', {})
+        market_news = news_data.get('market_analysis', '')
+        company_news = news_data.get('company_analysis', {})
+        
+        # Format winners and losers with enhanced data and news integration
         winners_text = ""
         for i, stock in enumerate(winners, 1):
             symbol = stock.get('symbol', '')
@@ -52,6 +57,9 @@ class ScriptGenerator:
             analyst_data = stock.get('analyst_data')
             insider_data = stock.get('insider_data')
             price_target = stock.get('price_target')
+            
+            # Get company-specific news
+            stock_news = company_news.get(symbol, '')
             
             winners_text += f"\n{i}. {symbol} ({company_name}): ${current_price} (+{percent_change:.2f}%)\n"
             winners_text += f"   Volume: {volume_ratio:.1f}x average\n"
@@ -69,6 +77,9 @@ class ScriptGenerator:
             if insider_data and insider_data.get('activity_level') == 'high':
                 net_activity = insider_data.get('net_activity', 'neutral')
                 winners_text += f"   Insider Activity: {net_activity.upper()}\n"
+            
+            if stock_news:
+                winners_text += f"   Recent News: {stock_news[:200]}...\n"
         
         losers_text = ""
         for i, stock in enumerate(losers, 1):
@@ -83,6 +94,9 @@ class ScriptGenerator:
             analyst_data = stock.get('analyst_data')
             insider_data = stock.get('insider_data')
             price_target = stock.get('price_target')
+            
+            # Get company-specific news
+            stock_news = company_news.get(symbol, '')
             
             losers_text += f"\n{i}. {symbol} ({company_name}): ${current_price} ({percent_change:.2f}%)\n"
             losers_text += f"   Volume: {volume_ratio:.1f}x average\n"
@@ -100,6 +114,9 @@ class ScriptGenerator:
             if insider_data and insider_data.get('activity_level') == 'high':
                 net_activity = insider_data.get('net_activity', 'neutral')
                 losers_text += f"   Insider Activity: {net_activity.upper()}\n"
+            
+            if stock_news:
+                losers_text += f"   Recent News: {stock_news[:200]}...\n"
         
         # Get economic calendar data
         economic_calendar = market_data.get('market_summary', {}).get('economic_calendar', {})
@@ -183,20 +200,43 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
 9. Reference actual news events and analyst actions
 10. Professional financial news tone
 
+HOST INTERACTION GUIDELINES:
+- DO NOT have hosts identify their jobs or backgrounds during the broadcast
+- Create natural, conversational banter between hosts in the intro and transitions
+- Use the hosts' personalities to create engaging dialogue
+- {lead_host_info['name']}: {lead_host_info['personality']} - {lead_host_info['tone']}
+- {supporting_host_info['name']}: {supporting_host_info['personality']} - {supporting_host_info['tone']}
+- Include light banter about market mood, interesting moves, or observations
+- Make transitions feel natural and conversational, not robotic
+
+NEWS INTEGRATION REQUIREMENTS:
+- ALWAYS reference specific news sources and events to explain stock movements
+- Use the provided news data to explain WHY stocks moved, not just WHAT happened
+- Reference specific articles, analyst reports, earnings news, or market events
+- Connect stock movements to broader market themes and sector trends
+- Use news data to provide context for volume patterns and price action
+
+LANGUAGE REQUIREMENTS:
+- AVOID repetitive phrases like "we will", "let's look at", "in this segment", "moving on", "next up"
+- Use varied transitions: "meanwhile", "conversely", "additionally", "furthermore", "on the flip side"
+- Vary sentence structure and length for natural flow
+- Use specific financial terminology appropriately
+- Create engaging, dynamic content that flows naturally
+
 STOCK SEGMENT REQUIREMENTS (100-120 words each):
 For each stock, you MUST include:
-- Host introduction and stock identification
+- Natural host introduction and stock identification
 - Price movement and volume analysis with specific percentages
-- Specific catalysts (news, earnings, analyst actions, sector trends)
+- SPECIFIC news catalysts (reference actual news sources provided)
 - Technical analysis (RSI, MACD, support/resistance if available)
 - Market context and sector impact
 - Forward-looking analysis and what to watch for
 
 MOST IMPORTANT: EXPLAIN WHY EACH STOCK MOVED THE WAY IT DID
 For each stock segment, you MUST explain:
-- What specific news, events, or catalysts drove the price movement
+- What specific news, events, or catalysts drove the price movement (use provided news data)
 - How market sentiment and sector trends influenced the stock
-- What analysts and experts are saying about the move
+- What analysts and experts are saying about the move (reference specific sources)
 - What the trading volume tells us about investor behavior
 - How this fits into broader market themes (AI, rate cuts, earnings, etc.)
 - What to watch for in the coming days/weeks
@@ -215,7 +255,7 @@ CRITICAL: ENSURE EACH STOCK SEGMENT IS 100-120 WORDS MINIMUM.
 CRITICAL: ENSURE TOTAL SCRIPT IS 1440+ WORDS.
 
 WORD COUNT BREAKDOWN (MINIMUM 1440 WORDS TOTAL):
-- Intro: 200 words (both hosts greeting and market mood discussion)
+- Intro: 200 words (natural host banter and market mood discussion)
 - Market Overview: 150 words (brief market summary and key themes)
 - Top 5 Winners: 5 segments, 100-120 words each (500-600 words total)
 - Top 5 Losers: 5 segments, 100-120 words each (500-600 words total)
@@ -224,7 +264,7 @@ WORD COUNT BREAKDOWN (MINIMUM 1440 WORDS TOTAL):
 
 CONTENT STRUCTURE (JSON):
 {{
-    "intro": "Both hosts greet and chat about market mood (200 words)",
+    "intro": "Natural host banter and market mood discussion (200 words)",
     "market_overview": "Market and economic context (150 words)",
     "winner_segments": [
         {{"host": "{lead_host}", "stock": "WINNER1", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
@@ -244,23 +284,27 @@ CONTENT STRUCTURE (JSON):
     "outro": "Closing remarks and preview of next session (150 words)"
 }}
 
-FINAL REMINDER: You MUST write 1440+ words total with 10 stock segments of 100-120 words each. Focus on creating engaging, informative content that explains WHY stocks moved the way they did, not just WHAT happened. Use specific data points, technical indicators, and news events to provide comprehensive analysis.
-        {{"host": "{supporting_host}", "stock": "LOSER5", "text": "Detailed analysis explaining WHY the stock moved (120+ words)"}}
-    ],
-    "market_sentiment": "Market sentiment and institutional activity (100-200 words)",
-    "outro": "Closing remarks (100-200 words)",
-    "estimated_runtime_minutes": {host_manager.get_target_runtime()},
-    "speaking_time_balance": {{"marcus_percentage": 50, "suzanne_percentage": 50}},
-    "quality_metrics": {{"total_words": 1440, "segments_count": 14}}
-}}
-
 EXAMPLES OF GOOD CONTENT WITH "WHY" ANALYSIS:
 
-Example Winner Segment (120+ words):
+Example Intro with Natural Banter (200 words):
+"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the NASDAQ-100. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.
+
+{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.
+
+{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.
+
+{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
+
+Example Winner Segment with News Integration (120+ words):
 "Alphabet Inc. (GOOGL) surged 2.88% today, outperforming the broader NASDAQ-100. The rally was driven by multiple catalysts: First, Reuters reported that Alphabet announced a $10 billion investment in AI infrastructure, positioning the company at the forefront of the ongoing AI arms race. This comes as investors are increasingly focused on AI leadership, with Microsoft and other tech giants also making significant AI investments. Second, the company's recent earnings report showed a 28% year-over-year jump in Google Cloud revenue, exceeding analyst expectations. Third, analysts from Benzinga and Seeking Alpha have raised their price targets, citing strong demand for AI-powered services and the company's dominant position in search advertising. Volume was 2.5 times the average, suggesting institutional investors are building positions ahead of next week's earnings. The move also reflects broader market rotation into growth stocks as the Federal Reserve signals potential rate cuts. Looking ahead, the upcoming earnings call will be a key catalyst, with analysts expecting continued momentum in cloud and AI segments."
 
-Example Loser Segment (120+ words):
+Example Loser Segment with News Integration (120+ words):
 "Tesla Inc. (TSLA) declined 0.66% today, underperforming its tech peers. The drop was primarily driven by regulatory concerns: Bloomberg reported that the National Highway Traffic Safety Administration is expanding its investigation into Tesla's Autopilot system, raising concerns about potential recalls or regulatory restrictions that could impact future sales. This regulatory scrutiny comes at a critical time as Tesla prepares to launch its Cybertruck and faces increasing competition in the EV space. Despite the setback, analysts remain divided: some, like those at CNBC, see the dip as a buying opportunity given Tesla's strong fundamentals and upcoming product launches, while others warn of increased regulatory headwinds that could slow growth. Trading volume was 1.8 times the average, indicating heightened investor anxiety about regulatory risks. The company's next earnings report, scheduled for later this month, will be closely watched for updates on regulatory issues and delivery numbers. Insider activity has been neutral, but any significant buying or selling by executives could further impact sentiment."
+
+Example Natural Transition:
+"{lead_host_info['name']}: That's a great point about the AI sector momentum. Meanwhile, over in the financial space, we're seeing some interesting developments that are worth discussing.
+
+{supporting_host_info['name']}: Absolutely! The banking sector has been showing some real resilience lately, and today's moves suggest investors are positioning themselves ahead of the Fed meeting next week."
 
 IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON object.
 """
@@ -369,9 +413,9 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
         supporting_host_info = host_manager.get_host_info(supporting_host)
         
-        # Create a realistic mock script
+        # Create a realistic mock script with natural banter
         mock_script = {
-            "intro": f"Welcome to Market Voices! I'm {lead_host_info['name']}, and today we're breaking down the NASDAQ-100 performance with my colleague {supporting_host_info['name']}. Let's dive into today's market action.",
+            "intro": f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the NASDAQ-100. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today.",
             "segments": [
                 {
                     "host": lead_host,
@@ -394,7 +438,7 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                     "topic": "Market Sentiment"
                 }
             ],
-            "outro": f"This wraps up today's Market Voices analysis. Thanks for joining us, and don't forget to subscribe for daily market insights. This is {lead_host_info['name']}, signing off.",
+            "outro": f"{lead_host_info['name']}: That wraps up today's market analysis! Don't forget to subscribe for daily insights, and I'll see you tomorrow for more market action. This is {lead_host_info['name']}, signing off!",
             "estimated_runtime_minutes": host_manager.get_target_runtime(),
             "speaking_time_balance": {
                 "marcus_percentage": 50,
@@ -429,8 +473,8 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         segments = []
         current_host = lead_host
         
-        # Create intro
-        intro = f"Welcome to Market Voices! I'm {lead_host_info['name']}, and today we're breaking down the NASDAQ-100 performance with my colleague {supporting_host_info['name']}. Let's dive into today's market action."
+        # Create intro with natural banter
+        intro = f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the NASDAQ-100. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
         
         # Create segments with alternating hosts
         for i, (paragraph, topic) in enumerate(zip(paragraphs[:4], segment_topics)):
@@ -451,8 +495,8 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             })
             current_host = supporting_host if current_host == lead_host else lead_host
         
-        # Create outro
-        outro = f"This wraps up today's Market Voices analysis. Thanks for joining us, and don't forget to subscribe for daily market insights. This is {lead_host_info['name']}, signing off."
+        # Create outro with natural closing
+        outro = f"{lead_host_info['name']}: That wraps up today's market analysis! Don't forget to subscribe for daily insights, and I'll see you tomorrow for more market action. This is {lead_host_info['name']}, signing off!"
         
         # Calculate speaking time balance
         marcus_segments = sum(1 for seg in segments if seg['host'] == 'marcus')
