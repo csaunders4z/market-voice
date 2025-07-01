@@ -42,6 +42,56 @@
 - Circuit breaker pattern prevents cascading failures
 - Zero data loss during recovery scenarios
 
+## 🚀 **CRITICAL: News Collection Enhancement (BLOCKS PRODUCTION)**
+
+### 0. **URGENT: Fix Script Quality Through Enhanced News Collection**
+**Priority**: CRITICAL - BLOCKING PRODUCTION | **Estimated Time**: 3 weeks
+
+**Problem Identified**: System has excellent infrastructure but poor script quality (50% score) due to insufficient news data to explain stock movements.
+
+#### Week 1: Foundation (July 1-7) - IMMEDIATE START
+- [ ] **Day 1-2**: Implement free news source scraping (Yahoo Finance, Seeking Alpha, MarketWatch, Benzinga, Reuters, Bloomberg, CNBC)
+- [ ] **Day 3-4**: Expand news collection to ALL top 10 winners and losers (currently only >3% moves)
+- [ ] **Day 5**: Create comprehensive stock news collection system
+- [ ] **Day 6-7**: Integrate enhanced news data with script generator
+
+#### Week 2: Intelligence Layer (July 8-14)
+- [ ] **Day 1-3**: Build news analysis engine to identify movement catalysts
+- [ ] **Day 4-5**: Implement catalyst identification (earnings, analyst actions, product news, regulatory, partnerships)
+- [ ] **Day 6-7**: Add market context analyzer (sector rotation, market themes, macro events)
+
+#### Week 3: Content Generation (July 15-21)
+- [ ] **Day 1-3**: Create story templates based on specific catalysts
+- [ ] **Day 4-5**: Enhance script generation with detailed news integration
+- [ ] **Day 6-7**: Full system testing and quality validation
+
+#### New Files to Create:
+```
+src/data_collection/
+├── stock_news_scraper.py        # Free news source scraping
+├── news_intelligence.py         # Catalyst analysis engine
+├── market_context_analyzer.py   # Broader market themes
+└── story_synthesizer.py         # Generate explanatory narratives
+
+src/script_generation/
+├── catalyst_templates.py        # Story templates by catalyst type
+└── enhanced_prompt_builder.py   # Build detailed prompts with news
+```
+
+#### Success Criteria:
+- [ ] **Script Quality Score**: 50% → 85%+ (CRITICAL FOR PRODUCTION)
+- [ ] **Content Length**: 655 words → 1440+ words
+- [ ] **News Coverage**: 100% of top movers have explanatory news content
+- [ ] **Catalyst Identification**: 90% of stock moves have identified catalysts
+- [ ] **Content Quality**: Data-driven narratives instead of generic templates
+
+#### Expected Impact:
+Transform script content from: *"Apple gained 2.8% today as tech stocks performed well."*
+
+To: *"Apple surged 2.8% following stronger-than-expected iPhone 15 sales data released this morning. Wedbush analysts raised their price target from $200 to $220, citing robust demand in China and upcoming AI integration features. The move comes as broader tech sector rotates into hardware plays ahead of holiday season, with Apple's ecosystem advantage positioning it well for AI revolution. Trading volume was 2.3x normal, suggesting institutional accumulation. Watch for management commentary on AI monetization during next week's earnings call."*
+
+---
+
 ## 🚀 **Next Steps for Production Deployment**
 
 ### 1. **Cost Analysis and Optimization**
@@ -134,6 +184,9 @@
 - **Validation Score**: > 85% overall health score ✅
 - **Error Rate**: < 1% of operations ✅
 - **Recovery Time**: < 5 minutes for automated recovery ✅
+- **Script Quality Score**: > 85% (CURRENTLY 50% - BLOCKING PRODUCTION) ❌
+- **Content Length**: > 1440 words (CURRENTLY 655 words) ❌
+- **News Integration**: Comprehensive explanatory content (CURRENTLY MINIMAL) ❌
 
 ---
 
@@ -175,12 +228,18 @@
 - [x] Implement error recovery and robust error handling
 - [ ] Conduct cost analysis and optimization
 
-### Phase 3 (Week 5-6): Production
+### Phase 2.5 (Week 5-7): CRITICAL - News Collection Enhancement
+- [ ] **Week 1**: Implement comprehensive news scraping and collection
+- [ ] **Week 2**: Build news intelligence and catalyst analysis
+- [ ] **Week 3**: Enhance script generation with detailed news integration
+- [ ] **Target**: Achieve 85%+ script quality score for production readiness
+
+### Phase 3 (Week 8-9): Production Deployment
 - [ ] Deploy to production environment
 - [ ] Conduct security and performance testing
 - [ ] Go-live and monitoring
 
-### Phase 4 (Week 7+): Optimization
+### Phase 4 (Week 10+): Optimization
 - [ ] Performance tuning and optimization
 - [ ] Feature enhancements based on usage data
 - [ ] Continuous improvement
@@ -198,7 +257,8 @@
 
 ### Business Risks:
 - **Cost Overruns**: Regular cost monitoring and optimization
-- **Quality Issues**: Continuous quality monitoring and improvement ✅
+- **Quality Issues**: CRITICAL - Script quality at 50% blocks production ❌
+- **Content Quality**: URGENT - Insufficient news data for explanatory content ❌
 - **Scalability**: Auto-scaling and performance testing ✅
 - **Security**: Regular security audits and updates
 
@@ -236,10 +296,50 @@
 
 ---
 
-*Last Updated: 2025-06-29*
-*Next Review: 2025-07-06*
+*Last Updated: 2025-07-01*
+*Next Review: 2025-07-08*
+*URGENT: Focus all development on News Collection Enhancement to fix script quality*
 
-# TODO
+# IMMEDIATE TODO - CRITICAL PRIORITIES
+
+## 🚨 **WEEK 1 (July 1-7): NEWS COLLECTION FOUNDATION - START IMMEDIATELY**
+- [ ] **Day 1-2 (URGENT)**: Implement `stock_news_scraper.py` with free news sources
+  - [ ] Yahoo Finance news scraping (`/quote/{symbol}/news`)
+  - [ ] Seeking Alpha articles (`/symbol/{symbol}/news`)  
+  - [ ] MarketWatch stories (`/investing/stock/{symbol}`)
+  - [ ] Benzinga news (`/quote/{symbol}`)
+  - [ ] Reuters company news (`/companies/{symbol}`)
+  - [ ] Bloomberg quote news (`/quote/{symbol}`)
+  - [ ] CNBC quotes (`/quotes/{symbol}`)
+
+- [ ] **Day 3-4**: Expand news collection coverage
+  - [ ] Modify `get_company_news_summary()` to collect news for ALL top 10 winners/losers (not just >3% moves)
+  - [ ] Implement comprehensive stock news collection for every significant mover
+  - [ ] Add multi-timeframe news collection (24h, 7d, earnings-related)
+
+- [ ] **Day 5**: Create comprehensive stock news system
+  - [ ] Build `get_comprehensive_stock_news()` function
+  - [ ] Integrate multiple news sources per stock
+  - [ ] Implement news deduplication and relevance scoring
+
+- [ ] **Day 6-7**: Script generator integration
+  - [ ] Modify script prompt to include detailed news data
+  - [ ] Test script quality improvements
+  - [ ] Measure word count and explanatory content improvements
+
+## 🎯 **WEEK 2 (July 8-14): INTELLIGENCE LAYER**
+- [ ] **Day 1-3**: Build `news_intelligence.py` - News Analysis Engine
+- [ ] **Day 4-5**: Implement catalyst identification system  
+- [ ] **Day 6-7**: Create `market_context_analyzer.py`
+
+## 🚀 **WEEK 3 (July 15-21): CONTENT GENERATION**
+- [ ] **Day 1-3**: Create `catalyst_templates.py` with story templates
+- [ ] **Day 4-5**: Enhance script generation with detailed news
+- [ ] **Day 6-7**: Full system testing and quality validation
+
+---
+
+# SECONDARY TODO - AFTER NEWS ENHANCEMENT
 
 - [ ] **MANDATORY:** Always collect price change data for ALL S&P 500 and NASDAQ-100 stocks before generating a script. Do not proceed with script generation unless full index coverage is achieved.
 - [ ] **Automate fallback symbol list updates:** Use the symbol updater script to fetch up-to-date S&P 500 (from DataHub) and NASDAQ-100 (from Wikipedia) symbols. The static fallback list must be kept current.
