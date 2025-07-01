@@ -241,13 +241,43 @@ def test_parallel_scaling():
     
     return results
 
+def test_full_scale_parallel():
+    """Run full-scale parallel collection on all available symbols"""
+    print("\n" + "=" * 80)
+    print("FULL-SCALE PARALLEL COLLECTION TEST")
+    print("=" * 80)
+    
+    logger = get_logger()
+    parallel_collector = ParallelCollector(max_workers=10, batch_size=20)
+    symbol_loader = SymbolLoader()
+    all_symbols = symbol_loader.get_all_symbols()
+    print(f"Collecting data for {len(all_symbols)} symbols...")
+    start_time = time.time()
+    results = parallel_collector.collect_data_parallel(symbols=all_symbols, production_mode=False)
+    duration = time.time() - start_time
+    print(f"\nFull-scale collection completed in {duration:.2f} seconds")
+    print(f"Success: {results.get('collection_success', False)}")
+    print(f"Symbols collected: {len(results.get('all_data', []))}")
+    stats = results.get('performance_stats', {})
+    if stats:
+        print(f"  Success rate: {stats.get('success_rate_percent', 0):.1f}%")
+        print(f"  Memory usage: {stats.get('memory_usage_mb', 0):.1f} MB")
+        print(f"  Memory delta: {stats.get('memory_delta_mb', 0):.1f} MB")
+    output_file = f"full_scale_parallel_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    with open(output_file, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    print(f"\n📄 Detailed results saved to: {output_file}")
+    return results
+
 if __name__ == "__main__":
     try:
         # Run main comparison test
-        results = test_parallel_vs_memory_optimized()
-        
+        if len(sys.argv) > 1 and sys.argv[1] == "--full-scale":
+            test_full_scale_parallel()
+        else:
+            results = test_parallel_vs_memory_optimized()
         # Run scaling test if requested
-        if len(sys.argv) > 1 and sys.argv[1] == "--scaling":
+        if len(sys.argv) > 2 and sys.argv[2] == "--scaling":
             scaling_results = test_parallel_scaling()
         
     except Exception as e:
