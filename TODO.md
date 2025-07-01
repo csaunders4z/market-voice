@@ -67,6 +67,60 @@
 - [x] **Day 6-7**: ✅ Validated system in production run - 83.3% quality score achieved!
 
 #### 🚀 IMMEDIATE NEXT STEPS (July 1-2):
+- [ ] **URGENT: Ensure S&P 500 Coverage in Script Generation**
+    - **Goal:** All script generation and market analysis workflows must include both S&P 500 and NASDAQ-100 stocks, with top movers selected from the combined universe.
+    - **Steps:**
+        1. Audit symbol loading and screening:
+            - Confirm that the symbol loader (`src/data_collection/symbol_loader.py`) and screening module (`src/data_collection/screening_module.py`) are using the combined list of S&P 500 and NASDAQ-100 stocks.
+            - Ensure `get_all_symbols()` is used everywhere top movers are selected.
+        2. Update data collection workflows:
+            - In all data collection scripts (e.g., `two_phase_collector.py`, `comprehensive_collector.py`, `unified_data_collector.py`), verify that the full combined symbol list is used for screening and analysis.
+            - Update any hardcoded references to NASDAQ-100 to use the combined list.
+        3. Update script generation inputs:
+            - In the script generator (`src/script_generation/script_generator.py`), ensure the `market_data` input includes top movers from both indices.
+            - Update prompt templates and output formatting to reference “NASDAQ-100 and S&P 500” or “major US stocks” as appropriate.
+        4. Testing:
+            - Add or update tests to confirm that top movers can be selected from both indices.
+            - Validate that the output script references S&P 500 stocks when they are among the top movers.
+        5. Documentation:
+            - Update documentation and README to reflect the expanded coverage.
+    - **Key Files/Modules:**
+        - `src/data_collection/symbol_loader.py`
+        - `src/data_collection/screening_module.py`
+        - `src/data_collection/two_phase_collector.py`
+        - `src/data_collection/comprehensive_collector.py`
+        - `src/data_collection/unified_data_collector.py`
+        - `src/script_generation/script_generator.py`
+
+- [ ] **URGENT: Leverage News Data for WHY Analysis**
+    - **Goal:** Each stock segment in the script must explain the WHY behind price movement, referencing specific news events, analyst actions, and sources.
+    - **Steps:**
+        1. Audit news data flow:
+            - Trace how news data is collected (e.g., `news_collector.py`, `stock_news_scraper.py`) and ensure it is available for each stock in the `market_data` structure passed to the script generator.
+        2. Enhance data structure:
+            - Ensure `market_data` includes a mapping of each top mover's symbol to a list of relevant news articles (headline, summary, source, timestamp).
+            - If not already present, update the news collection pipeline to provide this.
+        3. Update script generation logic:
+            - In `script_generator.py`, update the prompt construction so that for each top mover, the most relevant news headlines and summaries are included in the prompt.
+            - Adjust the prompt instructions to require the model to reference these news items when explaining WHY a stock moved.
+        4. Improve prompt engineering:
+            - Make the "WHY" requirement explicit in the prompt (e.g., "For each stock, explain the specific news, events, or catalysts that drove the price movement. Reference the provided news articles and sources.").
+            - Provide examples in the prompt of how to weave news headlines and sources into the analysis.
+        5. Post-processing and validation:
+            - After script generation, validate that each stock segment references at least one news event or source.
+            - If not, flag for review or attempt automated enhancement.
+        6. Testing:
+            - Add or update tests to ensure that news data is being used in the script output.
+            - Validate that the "WHY" for each stock is grounded in actual news data.
+        7. Documentation:
+            - Update documentation to describe the new news-driven analysis approach.
+    - **Key Files/Modules:**
+        - `src/data_collection/news_collector.py`
+        - `src/data_collection/stock_news_scraper.py`
+        - `src/script_generation/script_generator.py`
+        - `test_enhanced_news_collection.py`
+        - `test_news_integration.py`
+        - `test_production_script.py`
 - [ ] **Add Real API Keys**: Replace test keys with production NewsAPI, OpenAI, and FMP keys
 - [ ] **Enable Full Script Generation**: Remove test mode to activate complete OpenAI integration
 - [ ] **Production Deployment**: Deploy with real keys for full news volume and script quality
@@ -345,7 +399,7 @@ src/script_generation/
 - [ ] **Remove Test Mode**: Enable full OpenAI script generation  
 - [ ] **Go Live**: Deploy with real keys for complete news volume and script quality
 
-## � **FUTURE ENHANCEMENTS (Optional)**
+## 🎉 **FUTURE ENHANCEMENTS (Optional)**
 - [ ] **Enhanced Intelligence**: Build advanced news analysis engine
 - [ ] **Catalyst Detection**: Implement earnings, analyst, regulatory event detection
 - [ ] **Market Context**: Add sector rotation and macro event analysis
