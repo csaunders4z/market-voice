@@ -1,14 +1,25 @@
 """
 News collection for Market Voices
 Handles market and business news from multiple sources
+ENHANCED: Now includes comprehensive free news source scraping
 """
 import requests
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
-from loguru import logger
+import logging
+logger = logging.getLogger(__name__)
 import os
 
 from ..config.settings import get_settings
+
+# Import our new free news scraper
+try:
+    from .stock_news_scraper import stock_news_scraper
+    FREE_NEWS_AVAILABLE = True
+    logger.info("✅ Free news scraper available")
+except ImportError as e:
+    FREE_NEWS_AVAILABLE = False
+    logger.warning(f"⚠️  Free news scraper not available: {e}")
 
 
 class NewsCollector:
@@ -378,14 +389,101 @@ class NewsCollector:
             logger.debug(f"Biztoc company news failed: {str(e)}")
             return []
     
+    def get_comprehensive_company_news(self, symbol: str, company_name: str, percent_change: float) -> Dict:
+        """Get comprehensive news for a company using multiple sources including free scraping"""
+        try:
+            news_data = {
+                'symbol': symbol,
+                'company_name': company_name,
+                'percent_change': percent_change,
+                'articles': [],
+                'summary': '',
+                'catalysts': [],
+                'collection_success': False,
+                'sources_used': []
+            }
+            
+            all_articles = []
+            
+            # 1. Try free news scraper first (most comprehensive)
+            if FREE_NEWS_AVAILABLE:
+                try:
+                    free_articles = stock_news_scraper.get_comprehensive_stock_news(symbol, max_articles=15)
+                    if free_articles:
+                        # Convert NewsArticle objects to dicts
+                        for article in free_articles:
+                            all_articles.append({
+                                'title': article.title,
+                                'description': article.description,
+                                'content': article.content,
+                                'url': article.url,
+                                'source': article.source,
+                                'published_at': article.published_at,
+                                'author': article.author,
+                                'relevance_score': article.relevance_score,
+                                'word_count': article.word_count
+                            })
+                        news_data['sources_used'].append('free_scraper')
+                        logger.info(f"Free scraper collected {len(free_articles)} articles for {symbol}")
+                except Exception as e:
+                    logger.warning(f"Free scraper failed for {symbol}: {str(e)}")
+            
+            # 2. Get paid API news as supplement
+            try:
+                api_news = self.get_newsapi_news(symbol, 48)
+                biztoc_news = self.get_biztoc_news(symbol, 48)
+                
+                api_articles = api_news + biztoc_news
+                if api_articles:
+                    all_articles.extend(api_articles)
+                    news_data['sources_used'].extend(['newsapi', 'biztoc'])
+                    logger.info(f"API sources collected {len(api_articles)} additional articles for {symbol}")
+            except Exception as e:
+                logger.warning(f"API news collection failed for {symbol}: {str(e)}")
+            
+            # 3. Process and analyze articles
+            if all_articles:
+                # Sort by relevance
+                sorted_articles = sorted(all_articles, key=lambda x: x.get('relevance_score', 0), reverse=True)
+                news_data['articles'] = sorted_articles[:10]  # Top 10 most relevant
+                
+                # Create comprehensive summary
+                top_article = sorted_articles[0]
+                news_data['summary'] = self._create_news_summary(sorted_articles[:3], symbol)
+                
+                # Identify potential catalysts
+                news_data['catalysts'] = self._identify_news_catalysts(sorted_articles[:5])
+                
+                news_data['collection_success'] = True
+                logger.info(f"Comprehensive news collection for {symbol}: {len(sorted_articles)} articles, {len(news_data['catalysts'])} catalysts identified")
+            
+            return news_data
+            
+        except Exception as e:
+            logger.error(f"Error in comprehensive news collection for {symbol}: {str(e)}")
+            return {
+                'symbol': symbol,
+                'collection_success': False,
+                'error': str(e),
+                'articles': [],
+                'summary': '',
+                'catalysts': []
+            }
+    
     def get_company_news_summary(self, symbol: str, company_name: str, percent_change: float) -> str:
         """Get a concise news summary for a specific company"""
         try:
-            # Only fetch news for significant moves (>3% or high volume)
-            if abs(percent_change) < 3:
+            # ENHANCED: Collect news for ALL significant movers (reduced threshold from 3% to 1%)
+            # This ensures we have explanatory content for more stocks
+            if abs(percent_change) < 1:
                 return ""
             
-            # Get company-specific news
+            # Use comprehensive collection first
+            comprehensive_news = self.get_comprehensive_company_news(symbol, company_name, percent_change)
+            if comprehensive_news.get('collection_success') and comprehensive_news.get('summary'):
+                return comprehensive_news['summary']
+            
+            # Fallback to original method
             company_news = self.get_newsapi_news(symbol, 48)
             biztoc_company_news = self.get_biztoc_news(symbol, 48)
             
@@ -413,6 +511,70 @@ class NewsCollector:
         except Exception as e:
             logger.error(f"Error getting news summary for {symbol}: {str(e)}")
             return ""
+    
+    def _create_news_summary(self, articles: List[Dict], symbol: str) -> str:
+        """Create a comprehensive news summary from multiple articles"""
+        if not articles:
+            return ""
+        
+        # Get the most relevant article
+        top_article = articles[0]
+        title = top_article.get('title', '')
+        source = top_article.get('source', '')
+        description = top_article.get('description', '')
+        
+        # Create a rich summary
+        summary_parts = []
+        
+        if title:
+            summary_parts.append(title)
+        
+        if description and len(description) > 20:
+            summary_parts.append(description[:200] + "..." if len(description) > 200 else description)
+        
+        # Add source attribution
+        if source:
+            summary_parts.append(f"(Source: {source})")
+        
+        # Add additional context from other articles
+        if len(articles) > 1:
+            additional_sources = set()
+            for article in articles[1:3]:  # Next 2 articles
+                article_source = article.get('source', '')
+                if article_source and article_source != source:
+                    additional_sources.add(article_source)
+            
+            if additional_sources:
+                summary_parts.append(f"Additional coverage: {', '.join(list(additional_sources)[:2])}")
+        
+        return " ".join(summary_parts)
+    
+    def _identify_news_catalysts(self, articles: List[Dict]) -> List[str]:
+        """Identify potential stock movement catalysts from news articles"""
+        catalysts = []
+        
+        # Catalyst keywords and patterns
+        catalyst_patterns = {
+            'earnings': ['earnings', 'beat', 'miss', 'surprise', 'eps', 'revenue'],
+            'analyst_action': ['upgrade', 'downgrade', 'price target', 'rating', 'analyst'],
+            'product_news': ['launch', 'product', 'innovation', 'breakthrough', 'patent'],
+            'partnership': ['partnership', 'deal', 'acquisition', 'merger', 'collaboration'],
+            'regulatory': ['approval', 'fda', 'regulatory', 'compliance', 'investigation'],
+            'guidance': ['guidance', 'forecast', 'outlook', 'projections', 'expects'],
+            'insider_trading': ['insider', 'ceo', 'executive', 'management', 'shares']
+        }
+        
+        for article in articles:
+            title = article.get('title', '').lower()
+            description = article.get('description', '').lower()
+            content = f"{title} {description}"
+            
+            for catalyst_type, keywords in catalyst_patterns.items():
+                if any(keyword in content for keyword in keywords):
+                    if catalyst_type not in catalysts:
+                        catalysts.append(catalyst_type)
+        
+        return catalysts
     
     def get_market_news(self, symbols: List[str] = None, stock_data: List[Dict] = None) -> Dict:
         """Get comprehensive market news for the day with enhanced company integration"""
@@ -452,17 +614,39 @@ class NewsCollector:
                     if company_news:
                         all_news['company_news'][symbol] = company_news[:3]  # Top 3 per company
             
-            # Get news summaries for significant stock moves
+            # ENHANCED: Get comprehensive news for ALL top movers (expanded coverage)
             if stock_data:
-                for stock in stock_data:
+                # Process top 10 winners and losers for comprehensive news
+                sorted_stocks = sorted(stock_data, key=lambda x: abs(x.get('percent_change', 0)), reverse=True)
+                top_movers = sorted_stocks[:20]  # Top 20 movers get full news analysis
+                
+                comprehensive_news = {}
+                
+                for stock in top_movers:
                     symbol = stock.get('symbol', '')
                     company_name = stock.get('company_name', '')
                     percent_change = stock.get('percent_change', 0)
                     
-                    if symbol and abs(percent_change) >= 3:  # Significant moves
-                        news_summary = self.get_company_news_summary(symbol, company_name, percent_change)
-                        if news_summary:
-                            all_news['news_summaries'][symbol] = news_summary
+                    if symbol and abs(percent_change) >= 1:  # Lowered threshold
+                        try:
+                            # Get comprehensive news (includes catalysts and detailed analysis)
+                            comp_news = self.get_comprehensive_company_news(symbol, company_name, percent_change)
+                            if comp_news.get('collection_success'):
+                                comprehensive_news[symbol] = comp_news
+                                
+                                # Also add to simple summaries for backward compatibility
+                                if comp_news.get('summary'):
+                                    all_news['news_summaries'][symbol] = comp_news['summary']
+                        except Exception as e:
+                            logger.warning(f"Failed to get comprehensive news for {symbol}: {str(e)}")
+                            # Fallback to simple summary
+                            news_summary = self.get_company_news_summary(symbol, company_name, percent_change)
+                            if news_summary:
+                                all_news['news_summaries'][symbol] = news_summary
+                
+                # Add comprehensive news data
+                all_news['comprehensive_news'] = comprehensive_news
+                logger.info(f"Comprehensive news collected for {len(comprehensive_news)} stocks")
             
             all_news['collection_success'] = True
             logger.info(f"News collection completed. Market news: {len(all_news['market_news'])}, "
