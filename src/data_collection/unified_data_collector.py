@@ -57,9 +57,13 @@ class UnifiedDataCollector:
                     if symbol in news_data.get('news_summaries', {}):
                         stock['news_summary'] = news_data['news_summaries'][symbol]
                     
-                    # ENHANCED: Attach full news articles
+                    # ENHANCED: Attach full news articles (today's articles only)
                     if symbol in news_data.get('company_news', {}):
-                        stock['news_articles'] = news_data['company_news'][symbol][:5]  # Top 5 articles
+                        # Filter to today's articles only
+                        today_articles = [article for article in news_data['company_news'][symbol] 
+                                        if article.get('published_at') and 
+                                        datetime.fromisoformat(article['published_at'].replace('Z', '+00:00')).date() == datetime.now().date()]
+                        stock['news_articles'] = today_articles[:5]  # Top 5 today's articles
                     else:
                         stock['news_articles'] = []
                     
@@ -325,6 +329,16 @@ class UnifiedDataCollector:
             change_percent = (i % 3 - 1) * 2.5  # Alternating positive/negative changes
             price_change = base_price * (change_percent / 100)
             
+            # Create mock news data for testing
+            mock_news_articles = [
+                {
+                    'title': f'Mock News: {symbol} Shows Strong Performance',
+                    'source': 'Mock News Source',
+                    'published_at': datetime.now().isoformat(),
+                    'description': f'Mock news article about {symbol} performance'
+                }
+            ]
+            
             cached_data.append({
                 'symbol': symbol,
                 'company_name': f'Mock Company {symbol}',
@@ -339,7 +353,11 @@ class UnifiedDataCollector:
                 'rsi': 50.0 + (i * 5),
                 'macd_signal': None,
                 'technical_signals': [],
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                # ENHANCED: Include news fields for testing
+                'news_articles': mock_news_articles,
+                'news_analysis': f'Mock analysis: {symbol} moved due to mock market conditions',
+                'news_sources': ['Mock News Source']
             })
         
         return cached_data
@@ -442,11 +460,16 @@ class UnifiedDataCollector:
                     if enhanced_news and enhanced_news.get('collection_success'):
                         company_analysis = enhanced_news.get('company_analysis', {})
                         
-                        # Attach news articles to each stock in winners and losers
+                        # Attach news articles to each stock in winners and losers (today's articles only)
                         for stock in winners + losers:
                             symbol = stock.get('symbol', '')
                             if symbol in company_analysis:
-                                stock['news_articles'] = company_analysis[symbol].get('articles', [])
+                                # Filter to today's articles only
+                                all_articles = company_analysis[symbol].get('articles', [])
+                                today_articles = [article for article in all_articles 
+                                                if article.get('published_at') and 
+                                                datetime.fromisoformat(article['published_at'].replace('Z', '+00:00')).date() == datetime.now().date()]
+                                stock['news_articles'] = today_articles[:5]  # Top 5 today's articles
                                 stock['news_analysis'] = company_analysis[symbol].get('analysis_text', '')
                                 stock['news_sources'] = company_analysis[symbol].get('sources', [])
                             else:
@@ -454,7 +477,12 @@ class UnifiedDataCollector:
                                 try:
                                     basic_news = news_collector.get_market_news(symbols=[symbol])
                                     if symbol in basic_news.get('company_news', {}):
-                                        stock['news_articles'] = basic_news['company_news'][symbol][:3]  # Top 3 articles
+                                        # Filter to today's articles only
+                                        all_articles = basic_news['company_news'][symbol]
+                                        today_articles = [article for article in all_articles 
+                                                        if article.get('published_at') and 
+                                                        datetime.fromisoformat(article['published_at'].replace('Z', '+00:00')).date() == datetime.now().date()]
+                                        stock['news_articles'] = today_articles[:3]  # Top 3 today's articles
                                     else:
                                         stock['news_articles'] = []
                                 except:

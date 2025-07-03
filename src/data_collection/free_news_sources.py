@@ -290,8 +290,11 @@ class FreeNewsCollector:
         # Remove duplicates
         unique_articles = self._remove_duplicate_articles(sorted_articles)
         
-        logger.info(f"Retrieved {len(unique_articles)} unique articles from free sources")
-        return unique_articles[:limit]
+        # Filter today's articles
+        today_articles = self._filter_today_articles(unique_articles)
+        
+        logger.info(f"Retrieved {len(today_articles)} today's articles from free sources")
+        return today_articles[:limit]
     
     def _is_relevant_article(self, title: str, description: str, query: str) -> bool:
         """Check if article is relevant to the query"""
@@ -326,6 +329,54 @@ class FreeNewsCollector:
                 unique_articles.append(article)
         
         return unique_articles
+    
+    def _is_today_article(self, published_at: str) -> bool:
+        """Check if article was published today"""
+        if not published_at:
+            return False
+        
+        try:
+            # Parse the published_at date - handle various formats
+            if 'T' in published_at:
+                # ISO format: "2024-01-15T10:30:00Z"
+                article_date = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+            elif ' ' in published_at and len(published_at) > 10:
+                # Common format: "2024-01-15 10:30:00"
+                article_date = datetime.strptime(published_at, '%Y-%m-%d %H:%M:%S')
+            elif len(published_at) == 10:
+                # Date only: "2024-01-15"
+                article_date = datetime.strptime(published_at, '%Y-%m-%d')
+            else:
+                # Try to parse as relative time (e.g., "2 hours ago", "Today")
+                if 'today' in published_at.lower() or 'now' in published_at.lower():
+                    return True
+                # For other formats, assume it's recent if we can't parse it
+                return True
+            
+            # Get today's date (start of day)
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Check if article is from today
+            return article_date.date() == today.date()
+            
+        except Exception as e:
+            logger.debug(f"Error parsing date '{published_at}': {str(e)}")
+            # If we can't parse the date, assume it's recent
+            return True
+    
+    def _filter_today_articles(self, articles: List[Dict]) -> List[Dict]:
+        """Filter articles to only include those published today"""
+        if not articles:
+            return []
+        
+        today_articles = []
+        for article in articles:
+            published_at = article.get('published_at', '')
+            if self._is_today_article(published_at):
+                today_articles.append(article)
+        
+        logger.info(f"Filtered to {len(today_articles)} today's articles from {len(articles)} total articles")
+        return today_articles
 
 
 # Global instance

@@ -20,7 +20,7 @@ class FMPStockDataCollector:
         self.settings = get_settings()
         self.api_key = self.settings.fmp_api_key
         self.symbols = []  # Will be populated dynamically
-        self.base_url = "https://financialmodelingprep.com/api/v3"
+        self.base_url = "https://financialmodelingprep.com/stable"
         self._load_nasdaq_100_symbols()
 
     def _redact_apikey(self, url: str) -> str:
@@ -31,7 +31,7 @@ class FMPStockDataCollector:
     def _load_nasdaq_100_symbols(self):
         """Dynamically load the current NASDAQ-100 symbols from FMP API"""
         try:
-            url = f"{self.base_url}/nasdaq_constituent?apikey={self.api_key}"
+            url = f"{self.base_url}/nasdaq-100?apikey={self.api_key}"
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -687,20 +687,6 @@ class FMPStockDataCollector:
             if macd_data.get('crossover'):
                 technical_signals.append(f"MACD {macd_data['crossover']} crossover")
             
-            # Fetch additional data for significant movers or high volume
-            earnings_data = None
-            analyst_data = None
-            insider_data = None
-            
-            if abs(info.get('changesPercentage', 0)) > 3 or volume_ratio > 1.5:
-                # Only fetch additional data for significant movers to avoid API limits
-                try:
-                    earnings_data = self.fetch_earnings_calendar(symbol)
-                    analyst_data = self.fetch_analyst_ratings(symbol)
-                    insider_data = self.fetch_insider_trading(symbol)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch additional data for {symbol}: {str(e)}")
-            
             return {
                 'symbol': info.get('symbol', symbol),
                 'company_name': info.get('name', symbol),
@@ -715,12 +701,8 @@ class FMPStockDataCollector:
                 'rsi': rsi,
                 'macd_signal': macd_data.get('crossover'),
                 'technical_signals': technical_signals,
-                'earnings_data': earnings_data,
-                'analyst_data': analyst_data,
-                'insider_data': insider_data,
                 'timestamp': datetime.now().isoformat()
             }
-            
         except Exception as e:
             redacted_url = self._redact_apikey(url)
             error_str = str(e)
@@ -788,148 +770,6 @@ class FMPStockDataCollector:
             "average_change": avg_change,
             "total_stocks": total
         }
-
-    @api_rate_limiter.fmp_request
-    def fetch_earnings_calendar(self, symbol: str) -> Optional[Dict]:
-        """Fetch upcoming earnings data for a symbol"""
-        try:
-            url = f"{self.base_url}/earnings-calendar/{symbol}?apikey={self.api_key}"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            if not data or not isinstance(data, list):
-                return None
-            
-            # Get the next earnings date
-            upcoming_earnings = None
-            for earnings in data:
-                if earnings.get('date') and earnings.get('date') >= datetime.now().strftime('%Y-%m-%d'):
-                    upcoming_earnings = {
-                        'date': earnings.get('date'),
-                        'time': earnings.get('time'),
-                        'estimate': earnings.get('epsEstimate'),
-                        'actual': earnings.get('epsActual'),
-                        'revenue_estimate': earnings.get('revenueEstimate'),
-                        'revenue_actual': earnings.get('revenueActual')
-                    }
-                    break
-            
-            return upcoming_earnings
-            
-        except Exception as e:
-            logger.error(f"Error fetching earnings calendar for {symbol}: {str(e)}")
-            return None
-
-    @api_rate_limiter.fmp_request
-    def fetch_analyst_ratings(self, symbol: str) -> Optional[Dict]:
-        """Fetch analyst ratings and price targets"""
-        try:
-            url = f"{self.base_url}/analyst-stock-recommendations/{symbol}?apikey={self.api_key}"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            if not data or not isinstance(data, list):
-                return None
-            
-            # Get the most recent ratings
-            recent_ratings = data[:5]  # Last 5 ratings
-            
-            # Calculate consensus
-            ratings_count = {'buy': 0, 'hold': 0, 'sell': 0}
-            price_targets = []
-            
-            for rating in recent_ratings:
-                rating_type = rating.get('rating', '').lower()
-                if 'buy' in rating_type:
-                    ratings_count['buy'] += 1
-                elif 'hold' in rating_type:
-                    ratings_count['hold'] += 1
-                elif 'sell' in rating_type:
-                    ratings_count['sell'] += 1
-                
-                price_target = rating.get('priceTarget')
-                if price_target and price_target > 0:
-                    price_targets.append(price_target)
-            
-            # Determine consensus
-            total = sum(ratings_count.values())
-            if total > 0:
-                if ratings_count['buy'] > ratings_count['hold'] and ratings_count['buy'] > ratings_count['sell']:
-                    consensus = 'buy'
-                elif ratings_count['sell'] > ratings_count['hold'] and ratings_count['sell'] > ratings_count['buy']:
-                    consensus = 'sell'
-                else:
-                    consensus = 'hold'
-            else:
-                consensus = 'hold'
-            
-            avg_price_target = sum(price_targets) / len(price_targets) if price_targets else None
-            
-            return {
-                'consensus': consensus,
-                'ratings_count': ratings_count,
-                'average_price_target': avg_price_target,
-                'recent_ratings': recent_ratings[:3]  # Last 3 for summary
-            }
-            
-        except Exception as e:
-            logger.error(f"Error fetching analyst ratings for {symbol}: {str(e)}")
-            return None
-
-    @api_rate_limiter.fmp_request
-    def fetch_insider_trading(self, symbol: str) -> Optional[Dict]:
-        """Fetch recent insider trading activity"""
-        try:
-            url = f"{self.base_url}/insider-trading/{symbol}?apikey={self.api_key}"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            if not data or not isinstance(data, list):
-                return None
-            
-            # Get recent insider activity (last 30 days)
-            recent_activity = []
-            total_buy_value = 0
-            total_sell_value = 0
-            
-            for trade in data[:10]:  # Last 10 trades
-                trade_date = trade.get('filingDate')
-                if trade_date:
-                    # Check if within last 30 days
-                    try:
-                        trade_datetime = datetime.strptime(trade_date, '%Y-%m-%d')
-                        if (datetime.now() - trade_datetime).days <= 30:
-                            recent_activity.append(trade)
-                            
-                            # Calculate values
-                            shares = trade.get('securitiesTransacted', 0)
-                            price = trade.get('priceAcquired', 0)
-                            value = shares * price
-                            
-                            if trade.get('transactionType', '').lower() == 'buy':
-                                total_buy_value += value
-                            else:
-                                total_sell_value += value
-                    except:
-                        continue
-            
-            if recent_activity:
-                return {
-                    'recent_trades': recent_activity[:5],  # Top 5 recent
-                    'total_buy_value': total_buy_value,
-                    'total_sell_value': total_sell_value,
-                    'net_activity': 'buy' if total_buy_value > total_sell_value else 'sell',
-                    'activity_level': 'high' if len(recent_activity) >= 5 else 'moderate' if len(recent_activity) >= 2 else 'low'
-                }
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error fetching insider trading for {symbol}: {str(e)}")
-            return None
 
 # Global instance
 fmp_stock_collector = FMPStockDataCollector() 

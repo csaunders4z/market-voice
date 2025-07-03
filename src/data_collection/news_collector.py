@@ -87,8 +87,11 @@ class NewsCollector:
                     'word_count': len(full_text.split()) if full_text else 0
                 })
             
-            logger.info(f"Retrieved {len(processed_articles)} articles from NewsAPI")
-            return processed_articles
+            # Filter to today's articles only
+            today_articles = self._filter_today_articles(processed_articles)
+            
+            logger.info(f"Retrieved {len(today_articles)} today's articles from NewsAPI (from {len(processed_articles)} total)")
+            return today_articles
             
         except Exception as e:
             logger.error(f"Error fetching NewsAPI data: {str(e)}")
@@ -149,8 +152,11 @@ class NewsCollector:
                         'word_count': len(full_text.split()) if full_text else 0
                     })
             
-            logger.info(f"Retrieved {len(processed_articles)} articles from Biztoc")
-            return processed_articles
+            # Filter to today's articles only
+            today_articles = self._filter_today_articles(processed_articles)
+            
+            logger.info(f"Retrieved {len(today_articles)} today's articles from Biztoc (from {len(processed_articles)} total)")
+            return today_articles
             
         except Exception as e:
             logger.error(f"Error fetching Biztoc data: {str(e)}")
@@ -213,8 +219,11 @@ class NewsCollector:
                         'word_count': len(full_text.split()) if full_text else 0
                     })
             
-            logger.info(f"Retrieved {len(processed_articles)} articles from NewsData.io")
-            return processed_articles
+            # Filter to today's articles only
+            today_articles = self._filter_today_articles(processed_articles)
+            
+            logger.info(f"Retrieved {len(today_articles)} today's articles from NewsData.io (from {len(processed_articles)} total)")
+            return today_articles
             
         except Exception as e:
             logger.error(f"Error fetching NewsData.io data: {str(e)}")
@@ -277,8 +286,11 @@ class NewsCollector:
                         'word_count': len(full_text.split()) if full_text else 0
                     })
             
-            logger.info(f"Retrieved {len(processed_articles)} articles from The News API")
-            return processed_articles
+            # Filter to today's articles only
+            today_articles = self._filter_today_articles(processed_articles)
+            
+            logger.info(f"Retrieved {len(today_articles)} today's articles from The News API (from {len(processed_articles)} total)")
+            return today_articles
             
         except Exception as e:
             logger.error(f"Error fetching The News API data: {str(e)}")
@@ -983,6 +995,47 @@ class NewsCollector:
         except Exception as e:
             logger.debug(f"The News API top business failed: {str(e)}")
             return []
+    
+    def _is_today_article(self, published_at: str) -> bool:
+        """Check if article was published today"""
+        if not published_at:
+            return False
+        
+        try:
+            # Parse the published_at date
+            if 'T' in published_at:
+                # ISO format: "2024-01-15T10:30:00Z"
+                article_date = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+            elif ' ' in published_at:
+                # Common format: "2024-01-15 10:30:00"
+                article_date = datetime.strptime(published_at, '%Y-%m-%d %H:%M:%S')
+            else:
+                # Date only: "2024-01-15"
+                article_date = datetime.strptime(published_at, '%Y-%m-%d')
+            
+            # Get today's date (start of day)
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Check if article is from today
+            return article_date.date() == today.date()
+            
+        except Exception as e:
+            logger.debug(f"Error parsing date '{published_at}': {str(e)}")
+            return False
+    
+    def _filter_today_articles(self, articles: List[Dict]) -> List[Dict]:
+        """Filter articles to only include those published today"""
+        if not articles:
+            return []
+        
+        today_articles = []
+        for article in articles:
+            published_at = article.get('published_at', '')
+            if self._is_today_article(published_at):
+                today_articles.append(article)
+        
+        logger.info(f"Filtered to {len(today_articles)} today's articles from {len(articles)} total articles")
+        return today_articles
 
 
 # Global instance
