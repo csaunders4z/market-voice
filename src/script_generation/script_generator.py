@@ -13,6 +13,7 @@ import os
 from ..config.settings import get_settings
 from ..content_validation.quality_controls import quality_controller
 from .host_manager import host_manager
+from ..data_collection.symbol_loader import symbol_loader
 
 
 class ScriptGenerator:
@@ -192,26 +193,26 @@ class ScriptGenerator:
         
         # Get coverage statistics for both indices
         total_target_symbols = market_summary.get('total_target_symbols', 0)
-        sp500_coverage = market_summary.get('sp500_coverage', 0)
-        nasdaq100_coverage = market_summary.get('nasdaq100_coverage', 0)
+        nasdaq100_count = len(symbol_loader.get_nasdaq_100_symbols())
+        sp500_count = len(symbol_loader.get_sp_500_symbols())
         coverage_percentage = market_summary.get('coverage_percentage', 0)
         
         # Determine market coverage description
-        if sp500_coverage > 0 and nasdaq100_coverage > 0:
-            market_coverage_desc = f"Analyzing {sp500_coverage} S&P 500 and {nasdaq100_coverage} NASDAQ-100 stocks ({coverage_percentage:.1f}% coverage)"
-        elif sp500_coverage > 0:
-            market_coverage_desc = f"Analyzing {sp500_coverage} S&P 500 stocks"
-        elif nasdaq100_coverage > 0:
-            market_coverage_desc = f"Analyzing {nasdaq100_coverage} NASDAQ-100 stocks"
+        if sp500_count > 0 and nasdaq100_count > 0:
+            market_coverage_desc = f"Analyzing {sp500_count} S&P 500 and {nasdaq100_count} NASDAQ-100 stocks ({coverage_percentage:.1f}% coverage)"
+        elif sp500_count > 0:
+            market_coverage_desc = f"Analyzing {sp500_count} S&P 500 stocks"
+        elif nasdaq100_count > 0:
+            market_coverage_desc = f"Analyzing {nasdaq100_count} NASDAQ-100 stocks"
         else:
-            market_coverage_desc = market_summary.get('market_coverage', 'Analyzing major US stocks')
+            market_coverage_desc = market_summary.get('market_coverage', 'Analyzing major US stocks including NASDAQ-100 and S&P 500')
         
         enhanced_summary = f"""
 MARKET OVERVIEW:
 - Market Analysis: {market_coverage_desc}
 - Stocks analyzed: {market_summary.get('total_stocks_analyzed', 0)} out of {total_target_symbols} total target stocks
-- S&P 500 coverage: {sp500_coverage} stocks
-- NASDAQ-100 coverage: {nasdaq100_coverage} stocks
+- S&P 500 coverage: {sp500_count} stocks
+- NASDAQ-100 coverage: {nasdaq100_count} stocks
 - Advancing: {market_summary.get('advancing_stocks', 0)}, Declining: {market_summary.get('declining_stocks', 0)}
 - Average change: {market_summary.get('average_change', 0):.2f}%
 - Market sentiment: {market_summary.get('market_sentiment', 'Mixed')}
@@ -339,7 +340,7 @@ CONTENT STRUCTURE (JSON):
 EXAMPLES OF GOOD CONTENT WITH "WHY" ANALYSIS:
 
 Example Intro with Natural Banter (200 words):
-"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the NASDAQ-100. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.
+"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.
 
 {supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.
 
@@ -348,7 +349,7 @@ Example Intro with Natural Banter (200 words):
 {supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
 
 Example Winner Segment with News Integration (120+ words):
-"Alphabet Inc. (GOOGL) surged 2.88% today, outperforming the broader NASDAQ-100. The rally was driven by multiple catalysts: First, Reuters reported that Alphabet announced a $10 billion investment in AI infrastructure, positioning the company at the forefront of the ongoing AI arms race. This comes as investors are increasingly focused on AI leadership, with Microsoft and other tech giants also making significant AI investments. Second, the company's recent earnings report showed a 28% year-over-year jump in Google Cloud revenue, exceeding analyst expectations. Third, analysts from Benzinga and Seeking Alpha have raised their price targets, citing strong demand for AI-powered services and the company's dominant position in search advertising. Volume was 2.5 times the average, suggesting institutional investors are building positions ahead of next week's earnings. The move also reflects broader market rotation into growth stocks as the Federal Reserve signals potential rate cuts. Looking ahead, the upcoming earnings call will be a key catalyst, with analysts expecting continued momentum in cloud and AI segments."
+"Alphabet Inc. (GOOGL) surged 2.88% today, outperforming the broader market indices. The rally was driven by multiple catalysts: First, Reuters reported that Alphabet announced a $10 billion investment in AI infrastructure, positioning the company at the forefront of the ongoing AI arms race. This comes as investors are increasingly focused on AI leadership, with Microsoft and other tech giants also making significant AI investments. Second, the company's recent earnings report showed a 28% year-over-year jump in Google Cloud revenue, exceeding analyst expectations. Third, analysts from Benzinga and Seeking Alpha have raised their price targets, citing strong demand for AI-powered services and the company's dominant position in search advertising. Volume was 2.5 times the average, suggesting institutional investors are building positions ahead of next week's earnings. The move also reflects broader market rotation into growth stocks as the Federal Reserve signals potential rate cuts. Looking ahead, the upcoming earnings call will be a key catalyst, with analysts expecting continued momentum in cloud and AI segments."
 
 Example Loser Segment with News Integration (120+ words):
 "Tesla Inc. (TSLA) declined 0.66% today, underperforming its tech peers. The drop was primarily driven by regulatory concerns: Bloomberg reported that the National Highway Traffic Safety Administration is expanding its investigation into Tesla's Autopilot system, raising concerns about potential recalls or regulatory restrictions that could impact future sales. This regulatory scrutiny comes at a critical time as Tesla prepares to launch its Cybertruck and faces increasing competition in the EV space. Despite the setback, analysts remain divided: some, like those at CNBC, see the dip as a buying opportunity given Tesla's strong fundamentals and upcoming product launches, while others warn of increased regulatory headwinds that could slow growth. Trading volume was 1.8 times the average, indicating heightened investor anxiety about regulatory risks. The company's next earnings report, scheduled for later this month, will be closely watched for updates on regulatory issues and delivery numbers. Insider activity has been neutral, but any significant buying or selling by executives could further impact sentiment."

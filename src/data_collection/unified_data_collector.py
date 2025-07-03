@@ -15,6 +15,7 @@ from .fmp_stock_data import fmp_stock_collector
 from .news_collector import news_collector
 from .economic_calendar import economic_calendar
 from .free_news_sources import free_news_collector
+from .symbol_loader import symbol_loader
 
 
 class UnifiedDataCollector:
@@ -419,9 +420,13 @@ class UnifiedDataCollector:
                     continue
                 
                 # Create market summary
+                nasdaq100_count = len(symbol_loader.get_nasdaq_100_symbols())
+                sp500_count = len(symbol_loader.get_sp_500_symbols())
                 market_summary = {
                     'total_stocks_analyzed': len(data),
-                    'total_nasdaq_100_stocks': 100,  # NASDAQ-100 has 100 stocks
+                    'total_nasdaq_100_stocks': nasdaq100_count,
+                    'total_sp_500_stocks': sp500_count,
+                    'total_target_symbols': len(symbols),
                     'advancing_stocks': len([s for s in data if s.get('percent_change', 0) > 0]),
                     'declining_stocks': len([s for s in data if s.get('percent_change', 0) < 0]),
                     'average_change': sum(s.get('percent_change', 0) for s in data) / len(data),
@@ -429,7 +434,7 @@ class UnifiedDataCollector:
                     'market_date': datetime.now().isoformat(),
                     'collection_timestamp': datetime.now().isoformat(),
                     'data_source': source_name,
-                    'market_coverage': f"Analyzing {len(data)} representative NASDAQ-100 stocks"
+                    'market_coverage': f"Analyzing {len(data)} representative NASDAQ-100 and S&P 500 stocks"
                 }
                 
                 # Try to get market sentiment if available
@@ -574,9 +579,13 @@ class UnifiedDataCollector:
             winners = [stock for stock in cached_data if stock.get('percent_change', 0) > 0][:5]
             losers = [stock for stock in cached_data if stock.get('percent_change', 0) < 0][:5]
             
+            nasdaq100_count = len(symbol_loader.get_nasdaq_100_symbols())
+            sp500_count = len(symbol_loader.get_sp_500_symbols())
             market_summary = {
                 'total_stocks_analyzed': len(cached_data),
-                'total_nasdaq_100_stocks': 100,  # NASDAQ-100 has 100 stocks
+                'total_nasdaq_100_stocks': nasdaq100_count,
+                'total_sp_500_stocks': sp500_count,
+                'total_target_symbols': len(symbols),
                 'advancing_stocks': len([s for s in cached_data if s.get('percent_change', 0) > 0]),
                 'declining_stocks': len([s for s in cached_data if s.get('percent_change', 0) < 0]),
                 'average_change': sum(s.get('percent_change', 0) for s in cached_data) / len(cached_data),
@@ -584,7 +593,7 @@ class UnifiedDataCollector:
                 'market_date': datetime.now().isoformat(),
                 'collection_timestamp': datetime.now().isoformat(),
                 'data_source': 'Cached/Test Data',
-                'market_coverage': f"Analyzing {len(cached_data)} representative NASDAQ-100 stocks"
+                'market_coverage': f"Analyzing {len(cached_data)} representative NASDAQ-100 and S&P 500 stocks"
             }
             
             return {

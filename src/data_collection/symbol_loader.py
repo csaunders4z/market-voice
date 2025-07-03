@@ -23,6 +23,8 @@ class SymbolLoader:
         self.sp_500_symbols = []
         self.last_update = None
         self.update_interval = 3600  # Update every hour
+        self.nasdaq_100_source = None
+        self.sp_500_source = None
         
     def get_nasdaq_100_symbols(self) -> List[str]:
         """Get NASDAQ-100 symbols with caching"""
@@ -53,55 +55,53 @@ class SymbolLoader:
     def _load_nasdaq_100_symbols(self):
         """Load NASDAQ-100 symbols from multiple sources"""
         logger.info("Loading NASDAQ-100 symbols...")
-        
-        # Try multiple sources in order of preference
+        last_error = None
         sources = [
             self._load_nasdaq_100_from_stockanalysis,
             self._load_nasdaq_100_from_wikipedia,
             self._load_nasdaq_100_from_nasdaq,
             self._load_nasdaq_100_from_fmp
         ]
-        
         for source_func in sources:
             try:
                 symbols = source_func()
-                if symbols and len(symbols) >= 90:  # Should have at least 90 symbols
+                if symbols and len(symbols) >= 90:
                     self.nasdaq_100_symbols = symbols
                     logger.info(f"Successfully loaded {len(symbols)} NASDAQ-100 symbols from {source_func.__name__}")
+                    self.nasdaq_100_source = source_func.__name__
                     return
             except Exception as e:
+                last_error = e
                 logger.warning(f"Failed to load NASDAQ-100 from {source_func.__name__}: {str(e)}")
                 continue
-        
-        # Fallback to hardcoded list
-        logger.warning("All sources failed, using fallback NASDAQ-100 list")
+        logger.warning(f"All live NASDAQ-100 sources failed, using fallback NASDAQ-100 list. Last error: {last_error}")
         self._use_nasdaq_100_fallback()
+        self.nasdaq_100_source = 'fallback'
     
     def _load_sp_500_symbols(self):
         """Load S&P 500 symbols from multiple sources"""
         logger.info("Loading S&P 500 symbols...")
-        
-        # Try multiple sources in order of preference
+        last_error = None
         sources = [
             self._load_sp_500_from_wikipedia,
             self._load_sp_500_from_spglobal,
             self._load_sp_500_from_yahoo
         ]
-        
         for source_func in sources:
             try:
                 symbols = source_func()
-                if symbols and len(symbols) >= 450:  # Should have at least 450 symbols
+                if symbols and len(symbols) >= 450:
                     self.sp_500_symbols = symbols
                     logger.info(f"Successfully loaded {len(symbols)} S&P 500 symbols from {source_func.__name__}")
+                    self.sp_500_source = source_func.__name__
                     return
             except Exception as e:
+                last_error = e
                 logger.warning(f"Failed to load S&P 500 from {source_func.__name__}: {str(e)}")
                 continue
-        
-        # Fallback to hardcoded list
-        logger.warning("All sources failed, using fallback S&P 500 list")
+        logger.warning(f"All live S&P 500 sources failed, using fallback S&P 500 list. Last error: {last_error}")
         self._use_sp_500_fallback()
+        self.sp_500_source = 'fallback'
     
     def _load_nasdaq_100_from_stockanalysis(self) -> List[str]:
         """Load NASDAQ-100 symbols from StockAnalysis.com (reliable backup source)"""
@@ -552,6 +552,10 @@ class SymbolLoader:
             logger.error("Symbol refresh and validation failed")
         
         return validation_result
+
+    def print_symbol_sources(self):
+        print(f"NASDAQ-100: {len(self.nasdaq_100_symbols)} symbols (source: {self.nasdaq_100_source})")
+        print(f"S&P 500: {len(self.sp_500_symbols)} symbols (source: {self.sp_500_source})")
 
 
 # Global instance

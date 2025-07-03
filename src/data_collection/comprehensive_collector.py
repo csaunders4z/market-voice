@@ -16,6 +16,7 @@ from .fmp_stock_data import fmp_stock_collector
 from .news_collector import news_collector
 from .economic_calendar import economic_calendar
 from .free_news_sources import free_news_collector
+from .symbol_loader import symbol_loader
 
 
 class ComprehensiveDataCollector:
@@ -30,8 +31,6 @@ class ComprehensiveDataCollector:
     def _load_symbol_lists(self) -> Dict[str, List[str]]:
         """Load current symbol lists from symbol loader"""
         try:
-            from .symbol_loader import symbol_loader
-            
             # Get symbols from symbol loader
             all_symbols = symbol_loader.get_all_symbols()
             sp500_symbols = symbol_loader.get_sp_500_symbols()
