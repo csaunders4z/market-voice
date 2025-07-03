@@ -159,10 +159,29 @@ class ScriptGenerator:
         
         # Enhanced market summary
         market_summary = market_data.get('market_summary', {})
+        
+        # Get coverage statistics for both indices
+        total_target_symbols = market_summary.get('total_target_symbols', 0)
+        sp500_coverage = market_summary.get('sp500_coverage', 0)
+        nasdaq100_coverage = market_summary.get('nasdaq100_coverage', 0)
+        coverage_percentage = market_summary.get('coverage_percentage', 0)
+        
+        # Determine market coverage description
+        if sp500_coverage > 0 and nasdaq100_coverage > 0:
+            market_coverage_desc = f"Analyzing {sp500_coverage} S&P 500 and {nasdaq100_coverage} NASDAQ-100 stocks ({coverage_percentage:.1f}% coverage)"
+        elif sp500_coverage > 0:
+            market_coverage_desc = f"Analyzing {sp500_coverage} S&P 500 stocks"
+        elif nasdaq100_coverage > 0:
+            market_coverage_desc = f"Analyzing {nasdaq100_coverage} NASDAQ-100 stocks"
+        else:
+            market_coverage_desc = market_summary.get('market_coverage', 'Analyzing major US stocks')
+        
         enhanced_summary = f"""
 MARKET OVERVIEW:
-- NASDAQ-100 Market Analysis: {market_summary.get('market_coverage', 'Analyzing representative NASDAQ-100 stocks')}
-- Stocks analyzed: {market_summary.get('total_stocks_analyzed', 0)} out of {market_summary.get('total_nasdaq_100_stocks', 100)} NASDAQ-100 stocks
+- Market Analysis: {market_coverage_desc}
+- Stocks analyzed: {market_summary.get('total_stocks_analyzed', 0)} out of {total_target_symbols} total target stocks
+- S&P 500 coverage: {sp500_coverage} stocks
+- NASDAQ-100 coverage: {nasdaq100_coverage} stocks
 - Advancing: {market_summary.get('advancing_stocks', 0)}, Declining: {market_summary.get('declining_stocks', 0)}
 - Average change: {market_summary.get('average_change', 0):.2f}%
 - Market sentiment: {market_summary.get('market_sentiment', 'Mixed')}
@@ -173,7 +192,7 @@ MARKET OVERVIEW:
 """
         
         prompt = f"""
-You are writing a professional financial news script for "Market Voices," a daily NASDAQ-100 analysis show. Create a comprehensive, engaging script that explains market movements with specific details and analysis.
+You are writing a professional financial news script for "Market Voices," a daily analysis show covering major US stocks including NASDAQ-100 and S&P 500 companies. Create a comprehensive, engaging script that explains market movements with specific details and analysis.
 
 HOSTS:
 - {lead_host_info['name']} ({lead_host_info['age']}): {lead_host_info['personality']}
@@ -415,11 +434,11 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         
         # Create a realistic mock script with natural banter
         mock_script = {
-            "intro": f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the NASDAQ-100. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today.",
+            "intro": f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today.",
             "segments": [
                 {
                     "host": lead_host,
-                    "text": f"Today was an interesting session for the NASDAQ-100. We saw {market_data.get('market_summary', {}).get('advancing_stocks', 0)} stocks advance and {market_data.get('market_summary', {}).get('declining_stocks', 0)} decline, with an average change of {market_data.get('market_summary', {}).get('average_change', 0):.2f}%. This suggests a mixed but generally positive day for tech stocks.",
+                    "text": f"Today was an interesting session across the major US indices. We saw {market_data.get('market_summary', {}).get('advancing_stocks', 0)} stocks advance and {market_data.get('market_summary', {}).get('declining_stocks', 0)} decline, with an average change of {market_data.get('market_summary', {}).get('average_change', 0):.2f}%. This suggests a mixed but generally positive day for major US stocks.",
                     "topic": "Market Overview"
                 },
                 {
@@ -434,7 +453,7 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                 },
                 {
                     "host": supporting_host,
-                    "text": "The market is showing resilience despite some volatility. Volume was healthy, and institutional buying patterns suggest continued confidence in the tech sector's long-term prospects.",
+                    "text": "The market is showing resilience despite some volatility. Volume was healthy, and institutional buying patterns suggest continued confidence in the major US stocks' long-term prospects.",
                     "topic": "Market Sentiment"
                 }
             ],
@@ -474,7 +493,7 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         current_host = lead_host
         
         # Create intro with natural banter
-        intro = f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the NASDAQ-100. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
+        intro = f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
         
         # Create segments with alternating hosts
         for i, (paragraph, topic) in enumerate(zip(paragraphs[:4], segment_topics)):

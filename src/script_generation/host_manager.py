@@ -126,12 +126,12 @@ class HostManager:
         intro_templates = {
             'marcus': (
                 "Hey everyone, Marcus here! Welcome to Market Voices, your daily "
-                "dive into what's moving the NASDAQ-100. I'm excited to break down "
+                "dive into what's moving the major US markets. I'm excited to break down "
                 "today's biggest winners and losers with you."
             ),
             'suzanne': (
                 "Good evening, I'm Suzanne. Welcome to Market Voices, where we "
-                "analyze the day's NASDAQ-100 performance with the perspective "
+                "analyze the day's major US market performance with the perspective "
                 "of experienced market professionals."
             )
         }

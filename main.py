@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from src.utils.logger import setup_logging, get_logger
-from src.data_collection.two_phase_collector import two_phase_collector
+from src.data_collection.comprehensive_collector import comprehensive_collector
 from src.script_generation.script_generator import script_generator
 from src.content_validation.quality_controls import quality_controller
 from src.config.settings import get_settings
@@ -73,8 +73,8 @@ class MarketVoicesApp:
         security_config.secure_output_directories()
         
     def run_daily_workflow(self) -> Dict:
-        """Run the complete daily workflow using two-phase data collection"""
-        self.logger.info("Starting Market Voices daily workflow with two-phase data collection")
+        """Run the complete daily workflow using comprehensive data collection"""
+        self.logger.info("Starting Market Voices daily workflow with comprehensive data collection")
         
         workflow_result = {
             'workflow_success': False,
@@ -83,13 +83,13 @@ class MarketVoicesApp:
         }
         
         try:
-            # Step 1: Collect market data using two-phase workflow
-            self.logger.info("Step 1: Collecting market data (Two-Phase Workflow)")
-            market_data = two_phase_collector.collect_data()
+            # Step 1: Collect market data using comprehensive workflow
+            self.logger.info("Step 1: Collecting market data (Comprehensive Workflow)")
+            market_data = comprehensive_collector.collect_comprehensive_data()
             workflow_result['steps']['data_collection'] = market_data
             
             if not market_data.get('collection_success', False):
-                self.logger.error("Two-phase data collection failed")
+                self.logger.error("Comprehensive data collection failed")
                 return workflow_result
             
             # Step 2: Generate script
@@ -115,7 +115,7 @@ class MarketVoicesApp:
             secure_logging.cleanup_old_logs(days=30)
             
             workflow_result['workflow_success'] = True
-            self.logger.info("Daily workflow completed successfully with two-phase data collection")
+            self.logger.info("Daily workflow completed successfully with comprehensive data collection")
             
         except Exception as e:
             self.logger.error(f"Workflow error: {str(e)}")

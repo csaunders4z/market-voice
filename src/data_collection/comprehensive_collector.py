@@ -23,39 +23,38 @@ class ComprehensiveDataCollector:
     
     def __init__(self):
         self.settings = get_settings()
-        self.sources = [
-            ("FMP", self._collect_fmp_data),
-            ("Yahoo Finance", self._collect_yf_data),
-            ("Alpha Vantage", self._collect_av_data)
-        ]
         
         # Load current symbol lists
         self.symbol_lists = self._load_symbol_lists()
         
     def _load_symbol_lists(self) -> Dict[str, List[str]]:
-        """Load current symbol lists from files"""
+        """Load current symbol lists from symbol loader"""
         try:
-            # Try to load from current symbols file
-            current_file = "src/data_collection/symbol_lists/current_symbols.json"
-            if os.path.exists(current_file):
-                import json
-                with open(current_file, 'r') as f:
-                    data = json.load(f)
-                logger.info(f"Loaded symbol lists: {data['sp500_count']} S&P 500, {data['nasdaq100_count']} NASDAQ-100")
-                return data
-            else:
-                logger.warning("No current symbol lists found, using FMP collector symbols")
-                return {
-                    'all_symbols': fmp_stock_collector.symbols,
-                    'sp500_symbols': fmp_stock_collector.symbols,
-                    'nasdaq100_symbols': fmp_stock_collector.symbols
-                }
+            from .symbol_loader import symbol_loader
+            
+            # Get symbols from symbol loader
+            all_symbols = symbol_loader.get_all_symbols()
+            sp500_symbols = symbol_loader.get_sp_500_symbols()
+            nasdaq100_symbols = symbol_loader.get_nasdaq_100_symbols()
+            
+            logger.info(f"Loaded symbol lists: {len(sp500_symbols)} S&P 500, {len(nasdaq100_symbols)} NASDAQ-100, {len(all_symbols)} total unique")
+            
+            return {
+                'all_symbols': all_symbols,
+                'sp500_symbols': sp500_symbols,
+                'nasdaq100_symbols': nasdaq100_symbols,
+                'sp500_count': len(sp500_symbols),
+                'nasdaq100_count': len(nasdaq100_symbols)
+            }
         except Exception as e:
             logger.error(f"Failed to load symbol lists: {str(e)}")
+            # Fallback to FMP collector symbols
             return {
                 'all_symbols': fmp_stock_collector.symbols,
                 'sp500_symbols': fmp_stock_collector.symbols,
-                'nasdaq100_symbols': fmp_stock_collector.symbols
+                'nasdaq100_symbols': fmp_stock_collector.symbols,
+                'sp500_count': len(fmp_stock_collector.symbols),
+                'nasdaq100_count': len(fmp_stock_collector.symbols)
             }
     
     def collect_comprehensive_data(self, production_mode: bool = True) -> Dict:
