@@ -49,11 +49,28 @@ class UnifiedDataCollector:
                     stock_data=stock_data
                 )
                 
-                # Add news summaries to stock data
+                # ENHANCED: Attach news articles directly to stock data for easier script generation access
                 for stock in stock_data:
                     symbol = stock['symbol']
+                    
+                    # Attach news summary (existing functionality)
                     if symbol in news_data.get('news_summaries', {}):
                         stock['news_summary'] = news_data['news_summaries'][symbol]
+                    
+                    # ENHANCED: Attach full news articles
+                    if symbol in news_data.get('company_news', {}):
+                        stock['news_articles'] = news_data['company_news'][symbol][:5]  # Top 5 articles
+                    else:
+                        stock['news_articles'] = []
+                    
+                    # Attach comprehensive news if available
+                    if symbol in news_data.get('comprehensive_news', {}):
+                        comp_news = news_data['comprehensive_news'][symbol]
+                        stock['news_analysis'] = comp_news.get('summary', '')
+                        stock['news_sources'] = comp_news.get('sources', [])
+                    else:
+                        stock['news_analysis'] = ''
+                        stock['news_sources'] = []
                 
                 logger.info(f"FMP collection successful: {len(stock_data)} stocks")
                 return True, stock_data, "FMP API"
@@ -420,9 +437,61 @@ class UnifiedDataCollector:
                         stock_data=data
                     )
                     market_summary['enhanced_news'] = enhanced_news
+                    
+                    # ENHANCED: Attach news articles directly to each stock for easier script generation access
+                    if enhanced_news and enhanced_news.get('collection_success'):
+                        company_analysis = enhanced_news.get('company_analysis', {})
+                        
+                        # Attach news articles to each stock in winners and losers
+                        for stock in winners + losers:
+                            symbol = stock.get('symbol', '')
+                            if symbol in company_analysis:
+                                stock['news_articles'] = company_analysis[symbol].get('articles', [])
+                                stock['news_analysis'] = company_analysis[symbol].get('analysis_text', '')
+                                stock['news_sources'] = company_analysis[symbol].get('sources', [])
+                            else:
+                                # Fallback: try to get basic news data
+                                try:
+                                    basic_news = news_collector.get_market_news(symbols=[symbol])
+                                    if symbol in basic_news.get('company_news', {}):
+                                        stock['news_articles'] = basic_news['company_news'][symbol][:3]  # Top 3 articles
+                                    else:
+                                        stock['news_articles'] = []
+                                except:
+                                    stock['news_articles'] = []
+                                
+                                stock['news_analysis'] = ''
+                                stock['news_sources'] = []
+                        
+                        logger.info(f"Attached news articles to {len(winners + losers)} top movers")
+                    
                 except Exception as e:
                     logger.warning(f"Failed to get enhanced news analysis: {str(e)}")
                     market_summary['enhanced_news'] = None
+                    
+                    # Fallback: try to get basic news data for top movers
+                    try:
+                        basic_news = news_collector.get_market_news(
+                            symbols=[stock['symbol'] for stock in winners + losers]
+                        )
+                        
+                        for stock in winners + losers:
+                            symbol = stock.get('symbol', '')
+                            if symbol in basic_news.get('company_news', {}):
+                                stock['news_articles'] = basic_news['company_news'][symbol][:3]  # Top 3 articles
+                            else:
+                                stock['news_articles'] = []
+                            stock['news_analysis'] = ''
+                            stock['news_sources'] = []
+                        
+                        logger.info(f"Attached basic news articles to {len(winners + losers)} top movers (fallback)")
+                    except Exception as fallback_error:
+                        logger.warning(f"Failed to get basic news data: {str(fallback_error)}")
+                        # Ensure all stocks have empty news arrays
+                        for stock in winners + losers:
+                            stock['news_articles'] = []
+                            stock['news_analysis'] = ''
+                            stock['news_sources'] = []
                 
                 # Get free news analysis as backup/enhancement
                 try:

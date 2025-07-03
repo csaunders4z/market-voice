@@ -38,7 +38,7 @@ class ScriptGenerator:
         losers = market_data.get('losers', [])
         summary = market_data.get('market_summary', {})
         
-        # Get news data for integration
+        # Get news data for integration (keeping for backward compatibility)
         news_data = market_data.get('news_data', {})
         market_news = news_data.get('market_analysis', '')
         company_news = news_data.get('company_analysis', {})
@@ -58,8 +58,23 @@ class ScriptGenerator:
             insider_data = stock.get('insider_data')
             price_target = stock.get('price_target')
             
-            # Get company-specific news
-            stock_news = company_news.get(symbol, '')
+            # ENHANCED: Get news articles directly from stock data
+            news_articles = stock.get('news_articles', [])
+            news_analysis = stock.get('news_analysis', '')
+            news_sources = stock.get('news_sources', [])
+            
+            # Format news information for the prompt
+            news_info = ""
+            if news_articles:
+                news_info += f"   Recent News Articles:\n"
+                for j, article in enumerate(news_articles[:3], 1):  # Top 3 articles
+                    title = article.get('title', '')
+                    source = article.get('source', 'Unknown')
+                    published_at = article.get('published_at', '')
+                    news_info += f"   {j}. {title} ({source}) - {published_at}\n"
+            
+            if news_analysis:
+                news_info += f"   News Analysis: {news_analysis[:300]}...\n"
             
             winners_text += f"\n{i}. {symbol} ({company_name}): ${current_price} (+{percent_change:.2f}%)\n"
             winners_text += f"   Volume: {volume_ratio:.1f}x average\n"
@@ -78,8 +93,8 @@ class ScriptGenerator:
                 net_activity = insider_data.get('net_activity', 'neutral')
                 winners_text += f"   Insider Activity: {net_activity.upper()}\n"
             
-            if stock_news:
-                winners_text += f"   Recent News: {stock_news[:200]}...\n"
+            if news_info:
+                winners_text += news_info
         
         losers_text = ""
         for i, stock in enumerate(losers, 1):
@@ -95,8 +110,23 @@ class ScriptGenerator:
             insider_data = stock.get('insider_data')
             price_target = stock.get('price_target')
             
-            # Get company-specific news
-            stock_news = company_news.get(symbol, '')
+            # ENHANCED: Get news articles directly from stock data
+            news_articles = stock.get('news_articles', [])
+            news_analysis = stock.get('news_analysis', '')
+            news_sources = stock.get('news_sources', [])
+            
+            # Format news information for the prompt
+            news_info = ""
+            if news_articles:
+                news_info += f"   Recent News Articles:\n"
+                for j, article in enumerate(news_articles[:3], 1):  # Top 3 articles
+                    title = article.get('title', '')
+                    source = article.get('source', 'Unknown')
+                    published_at = article.get('published_at', '')
+                    news_info += f"   {j}. {title} ({source}) - {published_at}\n"
+            
+            if news_analysis:
+                news_info += f"   News Analysis: {news_analysis[:300]}...\n"
             
             losers_text += f"\n{i}. {symbol} ({company_name}): ${current_price} ({percent_change:.2f}%)\n"
             losers_text += f"   Volume: {volume_ratio:.1f}x average\n"
@@ -115,8 +145,8 @@ class ScriptGenerator:
                 net_activity = insider_data.get('net_activity', 'neutral')
                 losers_text += f"   Insider Activity: {net_activity.upper()}\n"
             
-            if stock_news:
-                losers_text += f"   Recent News: {stock_news[:200]}...\n"
+            if news_info:
+                losers_text += news_info
         
         # Get economic calendar data
         economic_calendar = market_data.get('market_summary', {}).get('economic_calendar', {})
@@ -234,6 +264,9 @@ NEWS INTEGRATION REQUIREMENTS:
 - Reference specific articles, analyst reports, earnings news, or market events
 - Connect stock movements to broader market themes and sector trends
 - Use news data to provide context for volume patterns and price action
+- Each stock segment MUST explain the catalyst or reason behind the price movement
+- Cite specific news sources (Reuters, Bloomberg, etc.) when available
+- If no specific news is available, explain the technical or market context
 
 LANGUAGE REQUIREMENTS:
 - AVOID repetitive phrases like "we will", "let's look at", "in this segment", "moving on", "next up"
