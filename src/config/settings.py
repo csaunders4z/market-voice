@@ -8,8 +8,13 @@ from datetime import time
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file if it exists (for local development)
+# In production/cloud environments, environment variables should be set directly
+try:
+    load_dotenv()
+except FileNotFoundError:
+    # No .env file found - this is expected in production/cloud environments
+    pass
 
 
 class Settings(BaseSettings):

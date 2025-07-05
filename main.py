@@ -23,8 +23,13 @@ from src.config.settings import get_settings
 from src.config.security import security_config
 from src.config.logging_config import secure_logging
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from .env file if it exists (for local development)
+# In production/cloud environments, environment variables should be set directly
+try:
+    load_dotenv()
+except FileNotFoundError:
+    # No .env file found - this is expected in production/cloud environments
+    pass
 
 class MarketVoicesApp:
     """Main application class for Market Voices"""
