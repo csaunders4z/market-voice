@@ -50,6 +50,32 @@ Market Voice is a financial news aggregation and script generation system that c
 - Yahoo Finance integration (via `yfinance`)
 - Rate limiter (`src/utils/rate_limiter.py`)
 
+#### 1.6 Comprehensive Data Collector (`src/data_collection/comprehensive_collector.py`)
+**Purpose**: Enhanced data collection with comprehensive analysis
+**Key Features**:
+- Multi-phase data collection strategy
+- Enhanced error handling and recovery
+- Comprehensive data validation
+- Performance optimization
+
+**Dependencies**:
+- Unified Data Collector (`unified_data_collector.py`)
+- Screening Module (`screening_module.py`)
+- Rate limiter (`src/utils/rate_limiter.py`)
+
+#### 1.7 Two-Phase Data Collector (`src/data_collection/two_phase_collector.py`)
+**Purpose**: Two-phase data collection strategy for optimal performance
+**Key Features**:
+- Phase 1: Quick screening and filtering
+- Phase 2: Detailed data collection for selected symbols
+- Performance optimization through selective processing
+- Memory-efficient processing
+
+**Dependencies**:
+- Screening Module (`screening_module.py`)
+- Unified Data Collector (`unified_data_collector.py`)
+- Rate limiter (`src/utils/rate_limiter.py`)
+
 #### 1.2 Parallel Data Collector (`src/data_collection/parallel_collector.py`)
 **Purpose**: High-performance parallel data collection
 **Key Features**:
@@ -78,6 +104,18 @@ Market Voice is a financial news aggregation and script generation system that c
 - `/api/v3/nasdaq_constituent` - Get NASDAQ-100 symbols
 - `/api/v3/quote/{symbol}` - Real-time quotes
 - `/api/v3/historical-price-full/{symbol}` - Historical data
+
+#### 1.8 Stock Data (`src/data_collection/stock_data.py`)
+**Purpose**: Yahoo Finance API integration for stock data
+**Key Features**:
+- Real-time stock quotes via yfinance
+- Historical price data
+- Company fundamentals
+- Market data integration
+
+**Dependencies**:
+- yfinance library
+- Rate limiter (`src/utils/rate_limiter.py`)
 
 #### 1.5 News Collection System
 
@@ -209,6 +247,24 @@ Market Voice is a financial news aggregation and script generation system that c
 - Usage analytics
 - Cost optimization suggestions
 
+#### 5.7 Symbol Management System
+
+##### Symbol Loader (`src/data_collection/symbol_loader.py`)
+**Purpose**: Dynamic symbol loading and management
+**Features**:
+- Multi-source symbol loading (Wikipedia, StockAnalysis, etc.)
+- Dynamic symbol list updates
+- Symbol validation and filtering
+- Source tracking and verification
+
+##### Symbol Updater (`src/data_collection/symbol_updater.py`)
+**Purpose**: Automated symbol list updates
+**Features**:
+- Scheduled symbol list updates
+- Change detection and notification
+- Backup and rollback capabilities
+- Update validation and testing
+
 #### 5.5 Error Recovery (`src/utils/error_recovery.py`)
 **Purpose**: Handle system failures gracefully
 **Features**:
@@ -234,6 +290,16 @@ Market Voice is a financial news aggregation and script generation system that c
 - API key management
 - Feature flags
 - Performance tuning
+
+#### 6.4 Package Initialization Files
+**Purpose**: Python package initialization and module organization
+**Files**:
+- `src/__init__.py`: Main package initialization
+- `src/config/__init__.py`: Configuration package initialization
+- `src/utils/__init__.py`: Utilities package initialization
+- `src/content_validation/__init__.py`: Content validation package initialization
+- `src/data_collection/__init__.py`: Data collection package initialization
+- `src/script_generation/__init__.py`: Script generation package initialization
 
 #### 6.2 Security (`src/config/security.py`)
 **Purpose**: Security and authentication
