@@ -88,7 +88,39 @@
 
 ## 🚀 **NEXT: Production Deployment (INFRASTRUCTURE COMPLETE)**
 
-### 0. **READY FOR PRODUCTION: Add Real API Keys and Deploy**
+### 0. **🚨 CRITICAL: Full Production Run Validation**
+**Priority**: HIGHEST - IMMEDIATE | **Estimated Time**: 1-2 hours | **Status**: READY TO EXECUTE
+
+#### 🎯 **Objective**: Validate complete system functionality before production deployment
+- [ ] **Full Production Run**: Execute complete workflow with real API keys
+- [ ] **End-to-End Testing**: Validate data collection → script generation → output
+- [ ] **Performance Validation**: Confirm 516 symbols processed in <5 minutes
+- [ ] **Quality Assessment**: Verify script quality score >80%
+- [ ] **Cost Validation**: Confirm actual API costs match projections
+- [ ] **Error Handling**: Test error recovery and fallback mechanisms
+- [ ] **Output Validation**: Verify script format and content quality
+
+#### 📋 **Validation Checklist**:
+- [ ] **Data Collection**: 516 symbols (NASDAQ-100 + S&P-500) collected successfully
+- [ ] **News Integration**: News articles collected for top movers
+- [ ] **Script Generation**: OpenAI integration working with real API
+- [ ] **Performance**: Processing time within 5-minute target
+- [ ] **Quality**: Script quality score exceeds 80%
+- [ ] **Costs**: API costs tracked and within budget
+- [ ] **Output**: Generated script saved and formatted correctly
+- [ ] **Logs**: Comprehensive logging without critical errors
+
+#### 🎯 **Success Criteria**:
+- [ ] 100% symbol collection success rate
+- [ ] Script quality score >80%
+- [ ] Processing time <5 minutes
+- [ ] API costs within $10 for test run
+- [ ] No critical errors in logs
+- [ ] Generated script ready for review
+
+---
+
+### 1. **READY FOR PRODUCTION: Add Real API Keys and Deploy**
 **Priority**: HIGH - READY FOR DEPLOYMENT | **Estimated Time**: 1-2 days
 
 **Achievement**: ✅ Enhanced news collection infrastructure COMPLETED and validated in production run!

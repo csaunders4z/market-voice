@@ -4,6 +4,7 @@ Tracks API costs and provides alerts when approaching budget limits
 """
 import time
 import json
+import os
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path

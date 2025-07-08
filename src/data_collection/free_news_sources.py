@@ -268,7 +268,7 @@ class FreeNewsCollector:
         
         # Get news from multiple sources
         sources = [
-            ('Yahoo Finance', self.get_yahoo_finance_news),
+            # ('Yahoo Finance', self.get_yahoo_finance_news),  # Disabled due to parsing errors
             ('Reuters RSS', self.get_reuters_rss_news),
             ('MarketWatch RSS', self.get_marketwatch_rss_news),
         ]
@@ -305,8 +305,8 @@ class FreeNewsCollector:
     def _calculate_relevance_score(self, article: Dict, query: str) -> float:
         """Calculate relevance score for an article"""
         score = 0.0
-        title = article.get('title', '').lower()
-        description = article.get('description', '').lower()
+        title = str(article.get('title', '')).lower()
+        description = str(article.get('description', '')).lower()
         query_terms = query.lower().split()
         
         for term in query_terms:
@@ -346,6 +346,13 @@ class FreeNewsCollector:
             elif len(published_at) == 10:
                 # Date only: "2024-01-15"
                 article_date = datetime.strptime(published_at, '%Y-%m-%d')
+            elif ',' in published_at and 'GMT' in published_at:
+                # RSS format: "Tue, 08 Jul 2025 03:21:00 GMT"
+                try:
+                    article_date = datetime.strptime(published_at, '%a, %d %b %Y %H:%M:%S GMT')
+                except ValueError:
+                    # Try alternative format without day name
+                    article_date = datetime.strptime(published_at, '%d %b %Y %H:%M:%S GMT')
             else:
                 # Try to parse as relative time (e.g., "2 hours ago", "Today")
                 if 'today' in published_at.lower() or 'now' in published_at.lower():

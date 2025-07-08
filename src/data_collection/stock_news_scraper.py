@@ -46,17 +46,17 @@ class StockNewsScraper:
         self.sources = {
             'yahoo_finance': {
                 'url_template': 'https://finance.yahoo.com/quote/{symbol}/news',
-                'enabled': True,
+                'enabled': False,  # Disabled due to 404 errors
                 'priority': 1
             },
             'seeking_alpha': {
                 'url_template': 'https://seekingalpha.com/symbol/{symbol}/news',
-                'enabled': True,
+                'enabled': False,  # Disabled due to 403 errors
                 'priority': 2
             },
             'marketwatch': {
                 'url_template': 'https://www.marketwatch.com/investing/stock/{symbol}',
-                'enabled': True,
+                'enabled': False,  # Disabled due to 401 errors
                 'priority': 3
             },
             'benzinga': {

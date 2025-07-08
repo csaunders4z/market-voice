@@ -20,7 +20,7 @@ class FMPStockDataCollector:
         self.settings = get_settings()
         self.api_key = self.settings.fmp_api_key
         self.symbols = []  # Will be populated dynamically
-        self.base_url = "https://financialmodelingprep.com/stable"
+        self.base_url = "https://financialmodelingprep.com/api/v3"
         self._load_nasdaq_100_symbols()
 
     def _redact_apikey(self, url: str) -> str:
@@ -31,7 +31,7 @@ class FMPStockDataCollector:
     def _load_nasdaq_100_symbols(self):
         """Dynamically load the current NASDAQ-100 symbols from FMP API"""
         try:
-            url = f"{self.base_url}/nasdaq-100?apikey={self.api_key}"
+            url = f"{self.base_url}/nasdaq_constituent?apikey={self.api_key}"
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             data = response.json()
