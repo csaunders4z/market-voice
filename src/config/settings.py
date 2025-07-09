@@ -17,14 +17,15 @@ class Settings(BaseSettings):
     
     # API Keys
     alpha_vantage_api_key: str = Field(default_factory=lambda: "DUMMY" if os.getenv("TEST_MODE") == "1" else ..., env="ALPHA_VANTAGE_API_KEY")
-    news_api_key: str = Field(default="", env="NEWS_API_KEY")  # Optional - can use other news sources
+    the_news_api_api_key: str = Field(default_factory=lambda: "DUMMY" if os.getenv("TEST_MODE") == "1" else ..., env="THE_NEWS_API_API_KEY")
     openai_api_key: str = Field(default_factory=lambda: "DUMMY" if os.getenv("TEST_MODE") == "1" else ..., env="OPENAI_API_KEY")
     rapidapi_key: str = Field(default="", env="RAPIDAPI_KEY")  # Optional for Biztoc news
     biztoc_api_key: str = Field(default="", env="BIZTOC_API_KEY")
     finnhub_api_key: str = Field(default="", env="FINNHUB_API_KEY")
     fmp_api_key: str = Field(default="", env="FMP_API_KEY")
-    newsdata_api_key: str = Field(default_factory=lambda: os.getenv("NEWSDATA_IO_API_KEY", ""), env="NEWSDATA_IO_API_KEY")  # NewsData.io API key
-    the_news_api_key: str = Field(default_factory=lambda: os.getenv("THE_NEWS_API_API_KEY", ""), env="THE_NEWS_API_API_KEY")  # The News API key
+    newsdata_io_api_key: str = Field(default="", env="NEWSDATA_IO_API_KEY")
+    data_source_priority: str = Field(default="fmp,yahoo,alpha_vantage", env="DATA_SOURCE_PRIORITY")
+    max_retries: int = Field(default=3, env="MAX_RETRIES")
     
     # Data Collection Settings
     nasdaq_100_symbols: List[str] = Field(

@@ -27,15 +27,15 @@ class NewsCollector:
     
     def __init__(self):
         self.settings = get_settings()
-        self.news_api_key = self.settings.news_api_key
+        self.the_news_api_api_key = self.settings.the_news_api_api_key
         self.rapidapi_key = os.getenv("BIZTOC_API_KEY", "")
         self.rapidapi_host = "biztoc.p.rapidapi.com"
         self.newsdata_api_key = self.settings.newsdata_api_key
         self.the_news_api_key = self.settings.the_news_api_key
         
     def get_newsapi_news(self, query: str = "NASDAQ", hours_back: int = 24) -> List[Dict]:
-        """Get news from NewsAPI with enhanced content"""
-        if self.news_api_key == "DUMMY":
+        """Get news from NewsAPI"""
+        if self.the_news_api_api_key == "DUMMY": 
             logger.info("Using dummy news data for test mode")
             return self._get_dummy_news()
             
@@ -46,10 +46,7 @@ class NewsCollector:
                 'from': (datetime.now() - timedelta(hours=hours_back)).isoformat(),
                 'sortBy': 'publishedAt',
                 'language': 'en',
-                'apiKey': self.news_api_key,
-                'pageSize': 20,  # Increased from default 20 to get more articles
-                'domains': 'reuters.com,bloomberg.com,marketwatch.com,cnbc.com,wsj.com,seekingalpha.com,benzinga.com,yahoo.com',  # Focus on financial news sources
-                'excludeDomains': 'twitter.com,facebook.com,instagram.com'  # Exclude social media
+                'apiKey': self.the_news_api_api_key
             }
             
             response = requests.get(url, params=params, timeout=15)
@@ -87,11 +84,16 @@ class NewsCollector:
                     'word_count': len(full_text.split()) if full_text else 0
                 })
             
+<<<<<<< HEAD
             # Filter to today's articles only
             today_articles = self._filter_today_articles(processed_articles)
             
             logger.info(f"Retrieved {len(today_articles)} today's articles from NewsAPI (from {len(processed_articles)} total)")
             return today_articles
+=======
+            logger.info(f"Retrieved {len(processed_articles)} articles from THE_NEWS_API")
+            return processed_articles
+>>>>>>> aace1f5 (Align Settings and .env for production: add missing API keys, fix env names, update NEWS_API_KEY to THE_NEWS_API_API_KEY everywhere. Note: OpenAI package downgraded for legacy API compatibility; TODO: migrate to openai>=1.0.0.)
             
         except Exception as e:
             logger.error(f"Error fetching NewsAPI data: {str(e)}")

@@ -20,15 +20,15 @@ cd ~/projects
 
 # Clone repository (you'll need to update the URL)
 echo "📥 Cloning repository..."
-if [ ! -d "stock-voice" ]; then
+if [ ! -d "market-voice" ]; then
     echo "Please update the git clone URL in this script with your actual repository URL"
     echo "Example: git clone https://github.com/yourusername/stock-voice.git"
-    # git clone https://github.com/yourusername/stock-voice.git
+    # git clone https://github.com/csaunders4z/market-voice.git
 else
     echo "Repository already exists"
 fi
 
-cd stock-voice
+cd market-voice
 
 # Create virtual environment
 echo "🐍 Setting up Python virtual environment..."
