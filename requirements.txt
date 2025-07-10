@@ -1,0 +1,19 @@
+# Market Voice - Core Requirements
+pydantic-settings
+python-dotenv
+requests
+loguru
+yfinance
+pytest
+psutil
+# Data and analysis
+pandas
+numpy
+# API clients
+openai
+# Optional: for free news scraping (if used)
+beautifulsoup4
+lxml
+# For type checking and linting
+mypy
+pyright

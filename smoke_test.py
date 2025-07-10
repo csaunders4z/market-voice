@@ -9,7 +9,8 @@ Performs a minimal, live-keys integration test of all critical dependencies:
 
 Run this script after any environment or dependency change, or before a full production run.
 """
-
+from dotenv import load_dotenv
+load_dotenv()
 import os
 import sys
 from pathlib import Path
@@ -63,9 +64,13 @@ def test_openai_api():
                 'market_date': datetime.now().isoformat()
             },
             'winners': [
-                {'symbol': 'AAPL', 'company_name': 'Apple Inc.', 'current_price': 150.25, 'percent_change': 2.5}
+                {'symbol': 'AAPL', 'company_name': 'Apple Inc.', 'current_price': 150.25, 'percent_change': 2.5},
+                {'symbol': 'MSFT', 'company_name': 'Microsoft Corp.', 'current_price': 320.10, 'percent_change': 1.8},
+                {'symbol': 'GOOGL', 'company_name': 'Alphabet Inc.', 'current_price': 2750.00, 'percent_change': 3.2}
             ],
-            'losers': [],
+            'losers': [
+                {'symbol': 'TSLA', 'company_name': 'Tesla Inc.', 'current_price': 700.00, 'percent_change': -1.5}
+            ],
             'collection_success': True
         }
         print("📝 Generating test script...")

@@ -99,3 +99,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp 
+
+
+# Existing rules...
+
+# Do not ignore requirements.txt
+!requirements.txt

@@ -21,7 +21,7 @@ class ScriptGenerator:
     
     def __init__(self):
         self.settings = get_settings()
-        self.client = openai.OpenAI(api_key=self.settings.openai_api_key)
+        self.client = openai.Client(api_key=self.settings.openai_api_key)
         self.model = self.settings.openai_model
         self.max_tokens = self.settings.max_tokens
         self.temperature = self.settings.temperature
@@ -405,7 +405,6 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                 max_tokens=self.max_tokens,
                 temperature=self.temperature
             )
-            
             script_text = response.choices[0].message.content
             
             # Check if we got a valid response

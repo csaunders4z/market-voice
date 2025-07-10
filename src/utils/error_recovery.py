@@ -13,7 +13,7 @@ import threading
 from functools import wraps
 import traceback
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class ErrorSeverity(Enum):

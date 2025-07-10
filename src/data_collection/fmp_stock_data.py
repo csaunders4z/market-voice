@@ -10,7 +10,7 @@ import numpy as np
 import time
 import re
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 from ..utils.rate_limiter import api_rate_limiter, rate_limiter
 
 

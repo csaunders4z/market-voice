@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 @dataclass

@@ -9,10 +9,10 @@ from loguru import logger
 import os
 import yfinance as yf
 
-from ..config.settings import get_settings
-from ..utils.rate_limiter import api_rate_limiter, rate_limiter
+from src.config.settings import get_settings
+from src.utils.rate_limiter import api_rate_limiter, rate_limiter
 from .fmp_stock_data import fmp_stock_collector
-from .news_collector import news_collector
+from src.data_collection.news_collector import news_collector
 from .economic_calendar import economic_calendar
 from .free_news_sources import free_news_collector
 from .symbol_loader import symbol_loader
@@ -23,14 +23,30 @@ class UnifiedDataCollector:
     
     def __init__(self):
         self.settings = get_settings()
+        from .finnhub_data_collector import finnhub_data_collector
         self.sources = [
             ("FMP", self._collect_fmp_data),
             ("Yahoo Finance", self._collect_yf_data),
-            ("Alpha Vantage", self._collect_av_data)
+            ("Alpha Vantage", self._collect_av_data),
+            ("Finnhub", self._collect_finnhub_data)
         ]
+        self._finnhub_consecutive_failures = 0
+        self._finnhub_failure_threshold = 5  # configurable
+        self._finnhub_disabled_for_session = False
+        # Global circuit breaker/session disable for Alpha Vantage
+        self._av_consecutive_failures = 0
+        self._av_failure_threshold = 5  # configurable
+        self._av_disabled_for_session = False
+        # Global circuit breaker/session disable for FMP
+        self._fmp_consecutive_failures = 0
+        self._fmp_failure_threshold = 5  # configurable
+        self._fmp_disabled_for_session = False
         
     def _collect_fmp_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
-        """Collect data from FMP API with rate limiting"""
+        """Collect data from FMP API with rate limiting and global circuit breaker"""
+        if self._fmp_disabled_for_session:
+            logger.error(f"FMP API disabled for this session after {self._fmp_failure_threshold} consecutive failures. Skipping all FMP requests.")
+            return False, [], f"FMP disabled for session after {self._fmp_failure_threshold} consecutive failures"
         try:
             logger.info("Attempting to collect data from FMP API...")
             
@@ -41,6 +57,7 @@ class UnifiedDataCollector:
             stock_data = fmp_stock_collector.collect_data()
             
             if stock_data:
+                self._fmp_consecutive_failures = 0  # Reset on success
                 # Analyze market sentiment
                 market_sentiment = fmp_stock_collector.analyze_market_sentiment(stock_data)
                 
@@ -80,10 +97,18 @@ class UnifiedDataCollector:
                 logger.info(f"FMP collection successful: {len(stock_data)} stocks")
                 return True, stock_data, "FMP API"
             else:
+                self._fmp_consecutive_failures += 1
+                if self._fmp_consecutive_failures >= self._fmp_failure_threshold:
+                    self._fmp_disabled_for_session = True
+                    logger.error(f"FMP API disabled for the remainder of this session after {self._fmp_failure_threshold} consecutive failures.")
                 logger.warning("FMP collection returned no data")
                 return False, [], "FMP API - No data"
                 
         except Exception as e:
+            self._fmp_consecutive_failures += 1
+            if self._fmp_consecutive_failures >= self._fmp_failure_threshold:
+                self._fmp_disabled_for_session = True
+                logger.error(f"FMP API disabled for the remainder of this session after {self._fmp_failure_threshold} consecutive failures (exception path).")
             logger.error(f"FMP collection failed: {str(e)}")
             return False, [], f"FMP API - {str(e)}"
         finally:
@@ -226,7 +251,10 @@ class UnifiedDataCollector:
             return False, [], f"Yahoo Finance - {str(e)}"
     
     def _collect_av_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
-        """Collect data from Alpha Vantage with rate limiting"""
+        """Collect data from Alpha Vantage with rate limiting and global circuit breaker"""
+        if self._av_disabled_for_session:
+            logger.error(f"Alpha Vantage API disabled for this session after {self._av_failure_threshold} consecutive failures. Skipping all AV requests.")
+            return False, [], f"Alpha Vantage disabled for session after {self._av_failure_threshold} consecutive failures"
         try:
             logger.info("Attempting to collect data from Alpha Vantage...")
             
@@ -299,6 +327,11 @@ class UnifiedDataCollector:
                     
                 except Exception as e:
                     logger.warning(f"Failed to fetch {symbol} from Alpha Vantage: {str(e)}")
+                    # On each symbol failure, increment consecutive failure counter
+                    self._av_consecutive_failures += 1
+                    if self._av_consecutive_failures >= self._av_failure_threshold:
+                        self._av_disabled_for_session = True
+                        logger.error(f"Alpha Vantage API disabled for the remainder of this session after {self._av_failure_threshold} consecutive failures.")
                     return None
             
             # Process symbols in batches with strict rate limiting for Alpha Vantage
@@ -312,13 +345,23 @@ class UnifiedDataCollector:
             
             if all_data:
                 logger.info(f"Alpha Vantage collection successful: {len(all_data)} stocks")
+                self._av_consecutive_failures = 0  # reset on success
                 return True, all_data, "Alpha Vantage"
             else:
                 logger.warning("Alpha Vantage collection returned no data")
+                # Increment consecutive failure counter for batch failure
+                self._av_consecutive_failures += 1
+                if self._av_consecutive_failures >= self._av_failure_threshold:
+                    self._av_disabled_for_session = True
+                    logger.error(f"Alpha Vantage API disabled for the remainder of this session after {self._av_failure_threshold} consecutive failures.")
                 return False, [], "Alpha Vantage - No data"
                 
         except Exception as e:
             logger.error(f"Alpha Vantage collection failed: {str(e)}")
+            self._av_consecutive_failures += 1
+            if self._av_consecutive_failures >= self._av_failure_threshold:
+                self._av_disabled_for_session = True
+                logger.error(f"Alpha Vantage API disabled for the remainder of this session after {self._av_failure_threshold} consecutive failures (exception path).")
             return False, [], f"Alpha Vantage - {str(e)}"
     
     def _create_cached_data(self, symbols: List[str]) -> List[Dict]:
@@ -606,6 +649,49 @@ class UnifiedDataCollector:
                 'timestamp': datetime.now().isoformat()
             }
 
+
+    def _collect_finnhub_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
+        """Collect data from Finnhub with global circuit breaker/session disable logic"""
+        if self._finnhub_disabled_for_session:
+            logger.error(f"Finnhub API disabled for this session after {self._finnhub_failure_threshold} consecutive failures. Skipping all Finnhub requests.")
+            return False, [], f"Finnhub disabled for session after {self._finnhub_failure_threshold} consecutive failures"
+        try:
+            logger.info("Attempting to collect data from Finnhub...")
+            all_data = []
+            for symbol in symbols:
+                data = finnhub_data_collector.get_quote(symbol)
+                if data:
+                    profile = finnhub_data_collector.get_company_profile(symbol)
+                    if profile:
+                        data.update({
+                            'company_name': profile.get('name', symbol),
+                            'market_cap': profile.get('marketCapitalization', 0),
+                            'industry': profile.get('finnhubIndustry', ''),
+                            'sector': profile.get('sector', ''),
+                            'exchange': profile.get('exchange', ''),
+                            'country': profile.get('country', ''),
+                        })
+                    all_data.append(data)
+                else:
+                    self._finnhub_consecutive_failures += 1
+                    if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                        self._finnhub_disabled_for_session = True
+                        logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures.")
+                        break
+            if all_data:
+                logger.info(f"Finnhub collection successful: {len(all_data)} stocks")
+                self._finnhub_consecutive_failures = 0
+                return True, all_data, "Finnhub"
+            else:
+                logger.warning("Finnhub collection returned no data")
+                return False, [], "Finnhub - No data"
+        except Exception as e:
+            self._finnhub_consecutive_failures += 1
+            if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                self._finnhub_disabled_for_session = True
+                logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures (exception path).")
+            logger.error(f"Finnhub collection failed: {str(e)}")
+            return False, [], f"Finnhub - {str(e)}"
 
 # Global instance
 unified_collector = UnifiedDataCollector() 

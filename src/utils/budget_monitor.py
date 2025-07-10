@@ -13,7 +13,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 from .cost_analyzer import cost_analyzer
 
 

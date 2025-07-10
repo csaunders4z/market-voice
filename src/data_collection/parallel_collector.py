@@ -47,13 +47,18 @@ class ParallelCollector:
         self.batch_size = batch_size
         self.rate_limiter = RateLimiter()  # Fixed: no parameters needed
         self.memory_threshold = 2.0  # 2GB memory threshold
-        
+
         # Error recovery setup
         self.error_manager = error_recovery_manager
         self.yahoo_circuit_breaker = self.error_manager.get_or_create_circuit_breaker(
             "yahoo_finance",
             CircuitBreakerConfig(failure_threshold=10, recovery_timeout=120)
         )
+
+        # Track consecutive Yahoo failures for global circuit breaker logic
+        self._consecutive_yahoo_failures = 0
+        self._yahoo_failure_threshold = 5  # configurable threshold for session breaker
+        self._yahoo_disabled_for_session = False
         
         self.collection_stats = {
             'total_processed': 0,
@@ -145,38 +150,46 @@ class ParallelCollector:
             return None
     
     def _process_symbol(self, task: CollectionTask) -> Optional[Dict]:
-        """Process a single symbol with enhanced error recovery"""
+        """Process a single symbol with enhanced error recovery and global Yahoo circuit breaker."""
         if self._should_stop_collection():
             return None
-        
+
+        # If Yahoo is globally disabled for this session, skip immediately
+        if self._yahoo_disabled_for_session:
+            logger.warning(f"Yahoo Finance API disabled for this session after repeated failures. Skipping {task.symbol}.")
+            with self._lock:
+                self.collection_stats['failed'] += 1
+                self._failed_symbols.append(task.symbol)
+            return None
+
         try:
             # Use circuit breaker for Yahoo Finance API calls
             def fetch_yahoo_data():
-                # Rate limiting using the existing RateLimiter
-                self.rate_limiter._wait_for_rate_limit("yahoo", 0.1)  # 0.1s delay between requests
-                
-                # Fetch data
+                self.rate_limiter._wait_for_rate_limit("yahoo", 0.1)
                 ticker = yf.Ticker(task.symbol)
                 stock_data = self._minimal_stock_data(task.symbol, ticker)
                 return stock_data
-            
-            # Execute with circuit breaker protection
+
             stock_data = self.yahoo_circuit_breaker.call(fetch_yahoo_data)
-            
+
             if stock_data:
                 with self._lock:
                     self.collection_stats['successful'] += 1
+                    self._consecutive_yahoo_failures = 0  # reset on success
                 return stock_data
             else:
                 # Enhanced retry logic with error classification
-                if task.retry_count < task.max_retries:
+                with self._lock:
+                    self._consecutive_yahoo_failures += 1
+                    if self._consecutive_yahoo_failures >= self._yahoo_failure_threshold:
+                        self._yahoo_disabled_for_session = True
+                        logger.error(f"Yahoo Finance API disabled for the remainder of this session after {self._yahoo_failure_threshold} consecutive failures.")
+                if task.retry_count < task.max_retries and not self._yahoo_disabled_for_session:
                     task.retry_count += 1
                     with self._lock:
                         self.collection_stats['retries'] += 1
                     logger.info(f"Retrying {task.symbol} (attempt {task.retry_count}/{task.max_retries})")
-                    
-                    # Exponential backoff for retries
-                    delay = min(2 ** task.retry_count, 10)  # Cap at 10 seconds
+                    delay = min(2 ** task.retry_count, 10)
                     time.sleep(delay)
                     return self._process_symbol(task)
                 else:
@@ -185,50 +198,41 @@ class ParallelCollector:
                         self._failed_symbols.append(task.symbol)
                     logger.warning(f"Failed to collect data for {task.symbol} after {task.max_retries} attempts")
                     return None
-                    
+
         except Exception as e:
-            # Enhanced error handling with classification and recovery
             error_info = self.error_manager.handle_error(e, {
                 'symbol': task.symbol,
                 'retry_count': task.retry_count,
                 'function': '_process_symbol'
             })
-            
             with self._lock:
                 self.collection_stats['errors_handled'] += 1
-                
-                # Check if circuit breaker was triggered
                 if self.yahoo_circuit_breaker.state.value == 'open':
                     self.collection_stats['circuit_breaker_trips'] += 1
-            
+                self._consecutive_yahoo_failures += 1
+                if self._consecutive_yahoo_failures >= self._yahoo_failure_threshold:
+                    self._yahoo_disabled_for_session = True
+                    logger.error(f"Yahoo Finance API disabled for the remainder of this session after {self._yahoo_failure_threshold} consecutive failures (exception path).")
             # Handle specific error types
             if error_info.error_type.value == 'rate_limit':
-                # Rate limit errors - use exponential backoff
-                if task.retry_count < task.max_retries:
+                if task.retry_count < task.max_retries and not self._yahoo_disabled_for_session:
                     task.retry_count += 1
-                    delay = min(2 ** task.retry_count, 30)  # Longer delay for rate limits
+                    delay = min(2 ** task.retry_count, 30)
                     logger.info(f"Rate limit hit for {task.symbol}, retrying in {delay}s")
                     time.sleep(delay)
                     return self._process_symbol(task)
-            
             elif error_info.error_type.value == 'network':
-                # Network errors - retry with shorter delays
-                if task.retry_count < task.max_retries:
+                if task.retry_count < task.max_retries and not self._yahoo_disabled_for_session:
                     task.retry_count += 1
                     logger.info(f"Network error for {task.symbol}, retrying...")
                     time.sleep(2)
                     return self._process_symbol(task)
-            
-            # For other errors, mark as failed
             with self._lock:
                 self.collection_stats['failed'] += 1
                 self._failed_symbols.append(task.symbol)
-            
             logger.warning(f"Error processing {task.symbol}: {error_info.message} (type: {error_info.error_type.value})")
             return None
-            
         finally:
-            # Clear ticker reference
             if 'ticker' in locals():
                 del ticker
     
@@ -369,7 +373,8 @@ class ParallelCollector:
             logger.info(f"  Retries: {self.collection_stats['retries']}")
             logger.info(f"  Errors handled: {self.collection_stats['errors_handled']}")
             logger.info(f"  Circuit breaker trips: {self.collection_stats['circuit_breaker_trips']}")
-            
+            if self._yahoo_disabled_for_session:
+                logger.error(f"Yahoo Finance API was disabled for this session after {self._yahoo_failure_threshold} consecutive failures. Fallback logic should be checked.")
             # Log error recovery summary
             error_summary = self.error_manager.get_error_summary()
             if error_summary['total_errors'] > 0:

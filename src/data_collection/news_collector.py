@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 import os
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 # Import our new free news scraper
 try:
@@ -22,19 +22,40 @@ except ImportError as e:
     logger.warning(f"⚠️  Free news scraper not available: {e}")
 
 
+from .finnhub_news_adapter import finnhub_news_adapter
+
 class NewsCollector:
-    """Collects market and business news from multiple sources"""
+    """Collects market and business news from multiple sources, including Finnhub"""
     
     def __init__(self):
         self.settings = get_settings()
         self.the_news_api_api_key = self.settings.the_news_api_api_key
         self.rapidapi_key = os.getenv("BIZTOC_API_KEY", "")
         self.rapidapi_host = "biztoc.p.rapidapi.com"
-        self.newsdata_api_key = self.settings.newsdata_api_key
-        self.the_news_api_key = self.settings.the_news_api_key
+        self.newsdata_api_key = self.settings.newsdata_io_api_key
+        # Global circuit breaker/session disable for NewsAPI
+        self._newsapi_consecutive_failures = 0
+        self._newsapi_failure_threshold = 5  # configurable
+        self._newsapi_disabled_for_session = False
+        # Global circuit breaker/session disable for Newsdata.io
+        self._newsdata_consecutive_failures = 0
+        self._newsdata_failure_threshold = 5  # configurable
+        self._newsdata_disabled_for_session = False
+        # Global circuit breaker/session disable for Biztoc
+        self._biztoc_consecutive_failures = 0
+        self._biztoc_failure_threshold = 5  # configurable
+        self._biztoc_disabled_for_session = False
+        # Global circuit breaker/session disable for The News API
+        self._thenewsapi_consecutive_failures = 0
+        self._thenewsapi_failure_threshold = 5  # configurable
+        self._thenewsapi_disabled_for_session = False
+
         
     def get_newsapi_news(self, query: str = "NASDAQ", hours_back: int = 24) -> List[Dict]:
-        """Get news from NewsAPI"""
+        """Get news from NewsAPI with global circuit breaker/session disable logic"""
+        if self._newsapi_disabled_for_session:
+            logger.error(f"NewsAPI disabled for this session after {self._newsapi_failure_threshold} consecutive failures. Skipping all NewsAPI requests.")
+            return []
         if self.the_news_api_api_key == "DUMMY": 
             logger.info("Using dummy news data for test mode")
             return self._get_dummy_news()
@@ -84,17 +105,10 @@ class NewsCollector:
                     'word_count': len(full_text.split()) if full_text else 0
                 })
             
-<<<<<<< HEAD
             # Filter to today's articles only
             today_articles = self._filter_today_articles(processed_articles)
-            
             logger.info(f"Retrieved {len(today_articles)} today's articles from NewsAPI (from {len(processed_articles)} total)")
             return today_articles
-=======
-            logger.info(f"Retrieved {len(processed_articles)} articles from THE_NEWS_API")
-            return processed_articles
->>>>>>> aace1f5 (Align Settings and .env for production: add missing API keys, fix env names, update NEWS_API_KEY to THE_NEWS_API_API_KEY everywhere. Note: OpenAI package downgraded for legacy API compatibility; TODO: migrate to openai>=1.0.0.)
-            
         except Exception as e:
             logger.error(f"Error fetching NewsAPI data: {str(e)}")
             return []
@@ -139,7 +153,7 @@ class NewsCollector:
                     content = article.get('content', '')  # Some APIs provide full content
                     
                     # Combine available text
-                    full_text = f"{description} {content}".strip()
+                    full_text = f"{description}\n{content}" if content else description
                     
                     processed_articles.append({
                         'title': title,
@@ -165,11 +179,14 @@ class NewsCollector:
             return []
     
     def get_newsdata_news(self, query: str = "NASDAQ", hours_back: int = 24, company: str = None) -> List[Dict]:
-        """Get news from NewsData.io with enhanced content and company support"""
+        """Get news from NewsData.io with enhanced content and company support, with global circuit breaker/session disable logic"""
+        if self._newsdata_disabled_for_session:
+            logger.error(f"NewsData.io disabled for this session after {self._newsdata_failure_threshold} consecutive failures. Skipping all NewsData.io requests.")
+            return []
         if not self.newsdata_api_key or self.newsdata_api_key == "DUMMY":
             logger.info("No NewsData.io API key provided, skipping NewsData.io news")
             return []
-            
+        
         try:
             articles = []
             
@@ -179,47 +196,29 @@ class NewsCollector:
             
             # 2. Company-specific news (if symbol provided)
             if company:
-                company_articles = self._get_newsdata_company_news(company, 8)
+                company_articles = self._get_newsdata_search(company, 8)
                 articles.extend(company_articles)
             
-            # 3. Market-specific news
-            market_articles = self._get_newsdata_market_news(5)
-            articles.extend(market_articles)
-            
-            # Deduplicate articles
-            unique_articles = self._deduplicate_news(articles)
+            # Deduplicate articles by URL
+            unique_articles = {a['url']: a for a in articles if 'url' in a}
             
             # Process articles with enhanced content
             processed_articles = []
-            for article in unique_articles[:15]:  # Limit to 15 best articles
-                if isinstance(article, dict):
-                    # Extract content fields, defaulting to empty string if None
-                    title = str(article.get('title', '') or '')
-                    description = str(article.get('description', '') or '')
-                    content = str(article.get('content', '') or '')
-                    
-                    # Combine available text
-                    full_text = f"{description} {content}".strip()
-                    
-                    # Get additional metadata
-                    source_name = str(article.get('source_name', '') or '')
-                    url = str(article.get('link', '') or '')
-                    published_at = str(article.get('pubDate', '') or '')
-                    category = article.get('category', []) or []
-                    
-                    processed_articles.append({
-                        'title': title,
-                        'description': description,
-                        'content': content,
-                        'full_text': full_text,
-                        'url': url,
-                        'source': source_name,
-                        'author': article.get('creator', [''])[0] if article.get('creator') else '',
-                        'published_at': published_at,
-                        'category': category,
-                        'relevance_score': self._calculate_relevance_score({'title': title, 'description': description}, query),
-                        'word_count': len(full_text.split()) if full_text else 0
-                    })
+            for article in unique_articles.values():
+                title = article.get('title', '')
+                description = article.get('description', '')
+                content = article.get('content', '')
+                full_text = f"{description}\n{content}" if content else description
+                processed_articles.append({
+                    'title': title,
+                    'description': description,
+                    'content': content,
+                    'url': article.get('url', ''),
+                    'source': article.get('source', ''),
+                    'published_at': article.get('pubDate', ''),
+                    'word_count': len(full_text.split()) if full_text else 0
+                })
+
             
             # Filter to today's articles only
             today_articles = self._filter_today_articles(processed_articles)
@@ -311,7 +310,13 @@ class NewsCollector:
                 "limit": str(limit)
             }
             
+            logger.info(f"About to call Biztoc API: {url} with headers: {headers} and params: {params}")
+            print(f"About to call Biztoc API: {url} with headers: {headers} and params: {params}")
             response = requests.get(url, headers=headers, params=params, timeout=15)
+            logger.info(f"Biztoc API {url} status: {response.status_code}")
+            logger.info(f"Biztoc API {url} response: {response.text}")
+            print(f"Biztoc API {url} status: {response.status_code}")
+            print(f"Biztoc API {url} response: {response.text}")
             response.raise_for_status()
             
             data = response.json()
@@ -320,15 +325,21 @@ class NewsCollector:
             elif isinstance(data, list):
                 return data
             return []
-            
         except Exception as e:
-            logger.debug(f"Biztoc search failed: {str(e)}")
+            self._biztoc_consecutive_failures += 1
+            if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
+                self._biztoc_disabled_for_session = True
+                logger.error(f"Biztoc API disabled for the remainder of this session after {self._biztoc_failure_threshold} consecutive failures.")
+            logger.error(f"Biztoc search failed: {str(e)}")
             return []
-    
+
     def _get_biztoc_trending(self, limit: int = 5) -> List[Dict]:
         """Get trending business news from Biztoc"""
+        if self._biztoc_disabled_for_session:
+            logger.error(f"Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
+            return []
         try:
-            url = f"https://{self.rapidapi_host}/trending"
+            url = f"https://biztoc.p.rapidapi.com/trending"
             headers = {
                 "X-RapidAPI-Key": self.rapidapi_key,
                 "X-RapidAPI-Host": self.rapidapi_host
@@ -342,17 +353,24 @@ class NewsCollector:
             
             data = response.json()
             if isinstance(data, dict):
-                return data.get('articles', [])
+                return data.get('results', [])
             elif isinstance(data, list):
                 return data
             return []
             
         except Exception as e:
-            logger.debug(f"Biztoc trending failed: {str(e)}")
+            self._biztoc_consecutive_failures += 1
+            if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
+                self._biztoc_disabled_for_session = True
+                logger.error(f"Biztoc API disabled for the remainder of this session after {self._biztoc_failure_threshold} consecutive failures.")
+            logger.error(f"Biztoc trending failed: {str(e)}")
             return []
     
     def _get_biztoc_market_news(self, limit: int = 5) -> List[Dict]:
         """Get market-specific news from Biztoc"""
+        if self._biztoc_disabled_for_session:
+            logger.error(f"Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
+            return []
         try:
             url = f"https://{self.rapidapi_host}/market"
             headers = {
@@ -372,7 +390,6 @@ class NewsCollector:
             elif isinstance(data, list):
                 return data
             return []
-            
         except Exception as e:
             logger.debug(f"Biztoc market news failed: {str(e)}")
             return []
@@ -442,15 +459,16 @@ class NewsCollector:
                 except Exception as e:
                     logger.warning(f"Free scraper failed for {symbol}: {str(e)}")
             
-            # 2. Get paid API news as supplement
+            # 2. Get paid API news as supplement, including Finnhub
             try:
                 api_news = self.get_newsapi_news(symbol, 48)
                 biztoc_news = self.get_biztoc_news(symbol, 48)
+                finnhub_news = finnhub_news_adapter.get_company_news(symbol)
                 
-                api_articles = api_news + biztoc_news
+                api_articles = api_news + biztoc_news + finnhub_news
                 if api_articles:
                     all_articles.extend(api_articles)
-                    news_data['sources_used'].extend(['newsapi', 'biztoc'])
+                    news_data['sources_used'].extend(['newsapi', 'biztoc', 'finnhub'])
                     logger.info(f"API sources collected {len(api_articles)} additional articles for {symbol}")
             except Exception as e:
                 logger.warning(f"API news collection failed for {symbol}: {str(e)}")
@@ -497,12 +515,13 @@ class NewsCollector:
             if comprehensive_news.get('collection_success') and comprehensive_news.get('summary'):
                 return comprehensive_news['summary']
             
-            # Fallback to original method
+            # Fallback to original method, now including Finnhub
             company_news = self.get_newsapi_news(symbol, 48)
             biztoc_company_news = self.get_biztoc_news(symbol, 48)
+            finnhub_company_news = finnhub_news_adapter.get_company_news(symbol)
             
             # Combine and sort by relevance
-            all_news = company_news + biztoc_company_news
+            all_news = company_news + biztoc_company_news + finnhub_company_news
             if not all_news:
                 return ""
             

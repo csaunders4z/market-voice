@@ -8,12 +8,14 @@ import json
 import time
 import re
 from typing import List, Dict, Optional
+from src.config.settings import get_settings
 from datetime import datetime, timedelta
 from urllib.parse import quote, urljoin
 import logging
 logger = logging.getLogger(__name__)
 import random
 from dataclasses import dataclass
+from src.data_collection.news_collector import news_collector
 
 @dataclass
 class NewsArticle:

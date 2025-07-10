@@ -10,7 +10,7 @@ from loguru import logger
 import json
 import os
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class SymbolUpdater:

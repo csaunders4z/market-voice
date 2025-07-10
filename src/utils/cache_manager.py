@@ -12,7 +12,7 @@ from loguru import logger
 import pickle
 import os
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class CacheManager:

@@ -10,7 +10,7 @@ from loguru import logger
 import asyncio
 from functools import wraps
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class RateLimiter:

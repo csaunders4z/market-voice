@@ -12,7 +12,7 @@ import time
 import random
 import os
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 from .fmp_stock_data import fmp_stock_collector
 from .news_collector import news_collector
 from .unified_data_collector import unified_collector

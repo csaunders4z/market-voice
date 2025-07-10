@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 import os
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class EconomicCalendar:
