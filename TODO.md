@@ -1,21 +1,33 @@
-# Market Voices - Production Roadmap
+# Market Voices - Solo Development Roadmap
 
-## 🎯 **NEW: Architecture Governance Implementation**
+## Architecture & Codebase Alignment
+- [ ] Keep TECHNICAL_ARCHITECTURE.md and ARCHITECTURE_GOVERNANCE.md up to date as the source of truth.
+- [ ] Periodically review code for architectural drift and refactor as needed.
+- [ ] Maintain clear, concise documentation for all new modules and major changes.
 
-### Architecture Governance Framework ✅ COMPLETED
-- [x] **TECHNICAL_ARCHITECTURE.md**: Comprehensive system architecture documentation
-- [x] **ARCHITECTURE_GOVERNANCE.md**: Processes and practices for active architecture use
-- [x] **Architecture Validation Script**: Automated checks for architectural consistency
-- [x] **Pre-commit Hook**: Architecture validation before commits
-- [x] **Documentation Standards**: Templates for component and change documentation
+## Data Integrity & Symbol Management
+- [ ] Always collect price change data for ALL S&P 500 and NASDAQ-100 stocks before generating a script.
+- [ ] Automate updates for symbol lists (S&P 500 from DataHub, NASDAQ-100 from Wikipedia).
+- [ ] Ensure fallback symbol list logic is robust (never leaves codebase in a broken state).
+- [ ] After updating symbols, always test data collection and script generation for full coverage.
 
-### Next Steps for Architecture Governance
-- [ ] **Schedule first architecture review meeting** (bi-weekly)
-- [ ] **Train team on architecture governance processes**
-- [ ] **Implement CI/CD architecture validation** (GitHub Actions)
-- [ ] **Create first Architecture Decision Record (ADR)** for current architecture
-- [ ] **Set up architecture metrics and monitoring**
-- [ ] **Establish architecture review checklist for PRs**
+## News & Catalyst Enhancement
+- [ ] Tune “today” logic for news (time zones, late-night/overnight articles).
+- [ ] Enhance catalyst detection (earnings, upgrades, M&A, etc.).
+- [ ] Add more news sources or robust fallback for low-news days.
+
+## Testing & Automation
+- [ ] Maintain efficient and realistic test coverage.
+- [ ] Add mocks for slow/external calls if increasing symbol counts in tests.
+- [ ] Use CI/CD for linting, testing, and deployment (optional for solo dev, but recommended).
+
+## Deployment & Monitoring
+- [ ] Use/maintain deploy.sh and PRODUCTION_DEPLOYMENT_GUIDE.md for production runs.
+- [ ] Monitor logs and outputs for errors or regressions.
+
+## Cleanup & Maintenance
+- [ ] Periodically review flagged orphaned/legacy files for removal or integration.
+- [ ] Remove or archive unused scripts and data.
 
 ## 🎯 **RECENT PROGRESS (July 2, 2025)**
 ✅ **COMPLETED: S&P 500 Coverage in Script Generation**

@@ -10,6 +10,7 @@ import sys
 import json
 from datetime import datetime
 from loguru import logger
+import time
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -34,7 +35,10 @@ def test_two_phase_workflow():
         logger.info("-" * 50)
         
         # Test with a subset of symbols for faster testing
-        screening_result = screening_module.screen_symbols(max_symbols=50)
+        t0 = time.perf_counter()
+        screening_result = screening_module.screen_symbols(max_symbols=5)
+        t1 = time.perf_counter()
+        logger.info(f"⏱️ Screening phase took {t1-t0:.2f} seconds.")
         
         if not screening_result.get('screening_success'):
             logger.error(f"❌ Screening failed: {screening_result.get('error', 'Unknown error')}")
@@ -65,7 +69,10 @@ def test_two_phase_workflow():
             logger.warning("⚠️  No top movers identified, skipping deep analysis")
             return False
         
+        t2 = time.perf_counter()
         analysis_result = deep_analysis_module.analyze_top_movers(winners, losers)
+        t3 = time.perf_counter()
+        logger.info(f"⏱️ Deep analysis phase took {t3-t2:.2f} seconds.")
         
         if not analysis_result.get('analysis_success'):
             logger.error("❌ Deep analysis failed")
@@ -106,7 +113,10 @@ def test_two_phase_workflow():
         logger.info("\n🔄 COMPLETE TWO-PHASE WORKFLOW")
         logger.info("-" * 50)
         
-        complete_result = two_phase_collector.collect_data(max_symbols=50)
+        t4 = time.perf_counter()
+        complete_result = two_phase_collector.collect_data(max_symbols=5)
+        t5 = time.perf_counter()
+        logger.info(f"⏱️ Complete two-phase workflow phase took {t5-t4:.2f} seconds.")
         
         if not complete_result.get('collection_success'):
             logger.error(f"❌ Complete workflow failed: {complete_result.get('error', 'Unknown error')}")
@@ -129,7 +139,10 @@ def test_two_phase_workflow():
         logger.info("\n📝 SCRIPT GENERATION WITH TWO-PHASE DATA")
         logger.info("-" * 50)
         
+        t6 = time.perf_counter()
         script_data = script_generator.generate_script(complete_result)
+        t7 = time.perf_counter()
+        logger.info(f"⏱️ Script generation phase took {t7-t6:.2f} seconds.")
         
         if not script_data.get('generation_success'):
             logger.error(f"❌ Script generation failed: {script_data.get('error', 'Unknown error')}")
@@ -151,8 +164,11 @@ def test_two_phase_workflow():
         logger.info("\n🔍 QUALITY VALIDATION")
         logger.info("-" * 50)
         
+        t8 = time.perf_counter()
         quality_controller = QualityController()
         quality_results = quality_controller.validate_script_quality(script_data)
+        t9 = time.perf_counter()
+        logger.info(f"⏱️ Quality validation phase took {t9-t8:.2f} seconds.")
         
         overall_score = quality_results.get('overall_score', 0)
         logger.info(f"✅ Quality validation completed!")
@@ -172,6 +188,7 @@ def test_two_phase_workflow():
         logger.info("\n💾 SAVING TEST RESULTS")
         logger.info("-" * 50)
         
+        t10 = time.perf_counter()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Save complete workflow data
@@ -185,6 +202,8 @@ def test_two_phase_workflow():
         formatted_script = script_generator.format_script_for_output(script_data)
         with open(script_file, 'w', encoding='utf-8') as f:
             f.write(formatted_script)
+        t11 = time.perf_counter()
+        logger.info(f"⏱️ Saving results phase took {t11-t10:.2f} seconds.")
         
         logger.info(f"✅ Test results saved:")
         logger.info(f"   Data: {data_file}")

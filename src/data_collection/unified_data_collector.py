@@ -11,7 +11,7 @@ import yfinance as yf
 
 from src.config.settings import get_settings
 from src.utils.rate_limiter import api_rate_limiter, rate_limiter
-from .fmp_stock_data import fmp_stock_collector
+from src.data_collection.fmp_stock_data import fmp_stock_collector
 from src.data_collection.news_collector import news_collector
 from .economic_calendar import economic_calendar
 from .free_news_sources import free_news_collector
@@ -458,32 +458,6 @@ class UnifiedDataCollector:
                 losers = [stock for stock in data if stock.get('percent_change', 0) < 0][:5]
                 
                 # Ensure we have enough data for analysis
-                if len(winners) < 3 or len(losers) < 1:
-                    logger.warning(f"Insufficient winners/losers from {source_name}: {len(winners)} winners, {len(losers)} losers")
-                    continue
-                
-                # Create market summary
-                nasdaq100_count = len(symbol_loader.get_nasdaq_100_symbols())
-                sp500_count = len(symbol_loader.get_sp_500_symbols())
-                market_summary = {
-                    'total_stocks_analyzed': len(data),
-                    'total_nasdaq_100_stocks': nasdaq100_count,
-                    'total_sp_500_stocks': sp500_count,
-                    'total_target_symbols': len(symbols),
-                    'advancing_stocks': len([s for s in data if s.get('percent_change', 0) > 0]),
-                    'declining_stocks': len([s for s in data if s.get('percent_change', 0) < 0]),
-                    'average_change': sum(s.get('percent_change', 0) for s in data) / len(data),
-                    'market_sentiment': 'Mixed',  # Default sentiment
-                    'market_date': datetime.now().isoformat(),
-                    'collection_timestamp': datetime.now().isoformat(),
-                    'data_source': source_name,
-                    'market_coverage': f"Analyzing {len(data)} representative NASDAQ-100 and S&P 500 stocks"
-                }
-                
-                # Try to get market sentiment if available
-                if source_name == "FMP":
-                    try:
-                        sentiment = fmp_stock_collector.analyze_market_sentiment(data)
                         market_summary['market_sentiment'] = sentiment.get('market_sentiment', 'Mixed')
                     except:
                         pass
@@ -654,30 +628,6 @@ class UnifiedDataCollector:
         """Collect data from Finnhub with global circuit breaker/session disable logic"""
         if self._finnhub_disabled_for_session:
             logger.error(f"Finnhub API disabled for this session after {self._finnhub_failure_threshold} consecutive failures. Skipping all Finnhub requests.")
-            return False, [], f"Finnhub disabled for session after {self._finnhub_failure_threshold} consecutive failures"
-        try:
-            logger.info("Attempting to collect data from Finnhub...")
-            all_data = []
-            for symbol in symbols:
-                data = finnhub_data_collector.get_quote(symbol)
-                if data:
-                    profile = finnhub_data_collector.get_company_profile(symbol)
-                    if profile:
-                        data.update({
-                            'company_name': profile.get('name', symbol),
-                            'market_cap': profile.get('marketCapitalization', 0),
-                            'industry': profile.get('finnhubIndustry', ''),
-                            'sector': profile.get('sector', ''),
-                            'exchange': profile.get('exchange', ''),
-                            'country': profile.get('country', ''),
-                        })
-                    all_data.append(data)
-                else:
-                    self._finnhub_consecutive_failures += 1
-                    if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
-                        self._finnhub_disabled_for_session = True
-                        logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures.")
-                        break
             if all_data:
                 logger.info(f"Finnhub collection successful: {len(all_data)} stocks")
                 self._finnhub_consecutive_failures = 0

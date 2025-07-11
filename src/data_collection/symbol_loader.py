@@ -11,13 +11,14 @@ from loguru import logger
 import time
 import re
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class SymbolLoader:
     """Dynamically loads NASDAQ-100 and S&P 500 symbol lists"""
     
     def __init__(self):
+        import threading
         self.settings = get_settings()
         self.nasdaq_100_symbols = []
         self.sp_500_symbols = []
@@ -25,6 +26,31 @@ class SymbolLoader:
         self.update_interval = 3600  # Update every hour
         self.nasdaq_100_source = None
         self.sp_500_source = None
+        self._fallback_start_time = None
+        self._auto_update_thread = threading.Thread(target=self._auto_update_loop, daemon=True)
+        self._auto_update_thread.start()
+
+    def _auto_update_loop(self):
+        import time
+        while True:
+            try:
+                self.update_symbols()
+                self._check_fallback_duration()
+            except Exception as e:
+                logger.error(f"Symbol auto-update failed: {str(e)}")
+            time.sleep(self.update_interval)
+
+    def _check_fallback_duration(self):
+        max_fallback_hours = 3
+        now = datetime.now()
+        if self.nasdaq_100_source == 'fallback' or self.sp_500_source == 'fallback':
+            if not self._fallback_start_time:
+                self._fallback_start_time = now
+            elif (now - self._fallback_start_time).total_seconds() > max_fallback_hours * 3600:
+                logger.warning(f"SymbolLoader has been using fallback lists for more than {max_fallback_hours} hours. Live sources may be down. Check connectivity and source APIs.")
+        else:
+            self._fallback_start_time = None
+
         
     def get_nasdaq_100_symbols(self) -> List[str]:
         """Get NASDAQ-100 symbols with caching"""

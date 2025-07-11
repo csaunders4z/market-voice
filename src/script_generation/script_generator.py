@@ -360,102 +360,12 @@ Example Natural Transition:
 {supporting_host_info['name']}: Absolutely! The banking sector has been showing some real resilience lately, and today's moves suggest investors are positioning themselves ahead of the Fed meeting next week."
 
 IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON object.
-"""
-        
-        return prompt
-    
-    def generate_script(self, market_data: Dict) -> Dict:
-        """Generate the complete script using OpenAI"""
-        logger.info("Starting script generation")
-        
-        try:
-            # Check if we have sufficient data for meaningful script generation
-            winners = market_data.get('winners', [])
-            losers = market_data.get('losers', [])
-            
-            if len(winners) < 3 or len(losers) < 1:
-                logger.warning(f"Insufficient data for script generation: {len(winners)} winners, {len(losers)} losers")
-                return {
-                    'generation_success': False,
-                    'error': f'Insufficient market data for script generation. Need at least 3 winners and 1 loser. Got {len(winners)} winners and {len(losers)} losers.',
-                    'market_date': datetime.now().isoformat(),
-                    'lead_host': 'unknown',
-                    'estimated_runtime_minutes': 0
-                }
-            
-            # Check if we're in test mode
-            if os.getenv("TEST_MODE") == "1":
-                logger.info("Running in test mode - generating mock script")
-                return self._generate_mock_script(market_data)
-            
-            # Determine lead host for today
-            lead_host = host_manager.get_lead_host_for_date()
-            logger.info(f"Lead host for today: {lead_host}")
-            
-            # Create the prompt
-            prompt = self.create_script_prompt(market_data, lead_host)
-            
-            # Generate script with OpenAI (v1.x API)
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a professional financial news script writer with expertise in market analysis and engaging storytelling. You must return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=self.max_tokens,
-                temperature=self.temperature
-            )
-            script_text = response.choices[0].message.content
-            
-            # Check if we got a valid response
-            if not script_text:
-                logger.error("OpenAI returned empty response")
-                return {
-                    "error": "OpenAI returned empty response",
-                    "generation_success": False
-                }
-            
-            # Try to parse as JSON
-            try:
-                script_data = json.loads(script_text)
-                logger.info("Successfully parsed script as JSON")
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse as JSON: {str(e)}")
-                logger.warning(f"Script text: {script_text[:500]}...")
-                script_data = self._create_structured_script(script_text, lead_host)
-            
-            # Validate and enhance the script
-            try:
-                script_data = self._validate_and_enhance_script(script_data, market_data, lead_host)
-            except Exception as e:
-                logger.error(f"Error in validation and enhancement: {str(e)}")
-                logger.error(f"Script data structure: {type(script_data)}")
-                if isinstance(script_data, dict):
-                    logger.error(f"Script keys: {list(script_data.keys())}")
-                raise
-            
-            # Run quality validation
-            quality_results = quality_controller.validate_script_quality(script_data)
-            script_data['quality_validation'] = quality_results
-            
-            # Log quality score
-            logger.info(f"Script quality score: {quality_results.get('overall_score', 0):.1f}%")
-            
-            # If quality score is low, attempt to improve
-            if quality_results.get('overall_score', 0) < 70:
-                logger.warning("Script quality below threshold, attempting improvements")
-                script_data = self._improve_script_quality(script_data, market_data, lead_host)
-            
-            logger.info("Script generation completed successfully")
-            script_data['generation_success'] = True
-            script_data['lead_host'] = lead_host
-            return script_data
-            
-        except Exception as e:
-            logger.error(f"Error generating script: {str(e)}")
             return {
-                "error": str(e),
-                "generation_success": False
+                'generation_success': False,
+                'error': f'Insufficient index coverage for script generation. S&P 500: {sp500_coverage}/{sp500_expected}, NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected}',
+                'market_date': datetime.now().isoformat(),
+                'lead_host': 'unknown',
+                'estimated_runtime_minutes': 0
             }
     
     def _generate_mock_script(self, market_data: Dict) -> Dict:

@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 import feedparser
 import time
 
-from ..config.settings import get_settings
+from src.config.settings import get_settings
 
 
 class FreeNewsCollector:
