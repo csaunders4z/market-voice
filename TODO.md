@@ -1,103 +1,56 @@
-# Market Voices - Solo Development Roadmap
+# Market Voices - Unified Roadmap & TODO
 
-## Architecture & Codebase Alignment
-- [ ] Keep TECHNICAL_ARCHITECTURE.md and ARCHITECTURE_GOVERNANCE.md up to date as the source of truth.
-- [ ] Periodically review code for architectural drift and refactor as needed.
-- [ ] Maintain clear, concise documentation for all new modules and major changes.
+## Recent Progress / Milestones
+- ✅ S&P 500 and NASDAQ-100 coverage is enforced in all workflows and script generation. Dynamic symbol lists and fallback logic are robust and tested.
+- ✅ Finnhub market data integration (phase 1) is complete, with robust fallback and normalization logic.
+- ✅ Test suite audit complete: legacy, unclear, or duplicative tests moved to legacy_tests/ for non-destructive archiving. Only core, integration, and critical feature tests remain in the main suite.
+- ✅ All absolute import refactors and dependency fixes completed; test suite is stable and reliable.
 
-## Data Integrity & Symbol Management
-- [ ] Always collect price change data for ALL S&P 500 and NASDAQ-100 stocks before generating a script.
-- [ ] Automate updates for symbol lists (S&P 500 from DataHub, NASDAQ-100 from Wikipedia).
-- [ ] Ensure fallback symbol list logic is robust (never leaves codebase in a broken state).
-- [ ] After updating symbols, always test data collection and script generation for full coverage.
+## Unified Roadmap & Task List
 
-## News & Catalyst Enhancement
-- [ ] Tune “today” logic for news (time zones, late-night/overnight articles).
-- [ ] Enhance catalyst detection (earnings, upgrades, M&A, etc.).
-- [ ] Add more news sources or robust fallback for low-news days.
+### Architecture & Codebase Alignment
+- [x] Review TECHNICAL_ARCHITECTURE.md and ARCHITECTURE_GOVERNANCE.md for architectural intent and governance
+- [x] Map current codebase structure and flag extra/legacy modules
+- [x] Audit codebase/test structure for alignment and anti-patterns
+- [x] Track orphaned/legacy files for later review (do not delete yet)
+- [x] Consolidate and deduplicate all test files; maintain only one source of truth
+- [x] Review and maintain efficient, realistic test coverage
+- [ ] Periodically review code for architectural drift and refactor as needed
+- [ ] Maintain clear, concise documentation for all new modules and major changes
 
-## Testing & Automation
-- [ ] Maintain efficient and realistic test coverage.
-- [ ] Add mocks for slow/external calls if increasing symbol counts in tests.
-- [ ] Use CI/CD for linting, testing, and deployment (optional for solo dev, but recommended).
+### Data Integrity & Symbol Management
+- [x] Always collect price change data for ALL S&P 500 and NASDAQ-100 stocks before script generation
+- [x] Automate symbol list updates (S&P 500 from DataHub, NASDAQ-100 from Wikipedia)
+- [x] Ensure fallback symbol list logic is robust and always produces valid code
+- [x] After updating symbols, test data collection and script generation for full coverage
 
-## Deployment & Monitoring
-- [ ] Use/maintain deploy.sh and PRODUCTION_DEPLOYMENT_GUIDE.md for production runs.
-- [ ] Monitor logs and outputs for errors or regressions.
+### News & Catalyst Enhancement
+- [x] Enhance news collector with comprehensive fallback system
+- [x] Attach company-specific and market context news to each stock for script generation
+- [ ] Integrate Finnhub news/sentiment in NewsCollector (phase 2)
+- [ ] Tune “today” logic for news (time zones, late-night/overnight articles)
+- [ ] Enhance catalyst detection (earnings, upgrades, M&A, etc.)
+- [ ] Add more news sources or robust fallback for low-news days
 
-## Cleanup & Maintenance
-- [ ] Periodically review flagged orphaned/legacy files for removal or integration.
-- [ ] Remove or archive unused scripts and data.
+### Testing & Automation
+- [x] Add mocks for slow/external calls in tests
+- [x] Use pytest-timeout to prevent hanging tests
+- [x] Add mock pytest fixtures for `symbols` and `market_data` (NASDAQ-100, S&P-500)
+- [ ] Analyze and fix any remaining slow or flaky tests
+- [ ] Use CI/CD for linting, testing, and deployment (optional for solo dev, but recommended)
 
-## 🎯 **RECENT PROGRESS (July 2, 2025)**
-✅ **COMPLETED: S&P 500 Coverage in Script Generation**
-- **Status**: FULLY COMPLETED - All workflows now include both S&P 500 and NASDAQ-100 stocks
-- **Key Achievements**:
-  - ✅ Updated all data collection workflows to use combined symbol lists
-  - ✅ Replaced hardcoded NASDAQ-100 (100) and S&P 500 (500) counts with dynamic counts
-  - ✅ Ensured system always uses most up-to-date symbol sources (Wikipedia, StockAnalysis, etc.)
-  - ✅ Added source tracking and verification capabilities
-  - ✅ Updated all script generation prompts to reference both indices
-  - ✅ Comprehensive testing confirms both indices are properly integrated
-- **Files Updated**: All collectors, script generator, and symbol loader modules
-- **Test Results**: All tests pass confirming proper S&P 500 and NASDAQ-100 coverage
+### Deployment & Monitoring
+- [x] Use/maintain deploy.sh and PRODUCTION_DEPLOYMENT_GUIDE.md for production runs
+- [ ] Monitor logs and outputs for errors or regressions
 
-✅ **COMPLETED: Leverage News Data for WHY Analysis**
-- **Status**: FULLY COMPLETED - Each stock segment now explains WHY behind price movements
-- **Key Achievements**:
-  - ✅ Enhanced news collector with comprehensive fallback system
-  - ✅ Company-specific news generation based on stock movement patterns
-  - ✅ Contextual news summaries for WHY analysis (earnings, sentiment, technical)
-  - ✅ News articles attached directly to each stock for script generation
-  - ✅ Robust fallback when APIs fail (rate limits, errors)
-  - ✅ Market context news (Fed policy, sector rotation, earnings season)
-  - ✅ Script generator can access all news data for comprehensive WHY analysis
-- **Files Updated**: 
-  - `src/data_collection/news_collector.py` (enhanced with fallback methods)
-  - `src/data_collection/unified_data_collector.py` (news integration)
-  - `test_enhanced_news_integration.py` (new comprehensive test)
-- **Test Results**: 
-  - ✅ 5 market news articles available for general context
-  - ✅ 3 companies with 2 articles each + detailed summaries
-  - ✅ 2/2 stocks in unified collector have news articles
-  - ✅ Script generator can access news data for WHY analysis
+### Cleanup & Maintenance
+- [x] Periodically review flagged orphaned/legacy files for removal or integration
+- [x] Remove or archive unused scripts and data
+- [ ] Continue to enforce efficiency principle: only fetch news for top/bottom 10 stocks, not all symbols
+- [ ] Scaffold Finnhub alternative data in DeepAnalysisModule/ScreeningModule (phase 3)
 
-## 🎯 **Current Status**
-✅ **COMPLETED**: Comprehensive symbol coverage expansion and validation system
-- Expanded from ~50 to 257+ NASDAQ-100 and S&P 500 stocks
-- Implemented two-phase data collection workflow
-- Added dynamic symbol loading from multiple sources
-- Created comprehensive validation and maintenance systems
-- Fixed all dependency and deprecation issues
-
-✅ **COMPLETED**: Memory Optimization and Performance Testing
-- Implemented memory-optimized data collector with streaming processing
-- Reduced processing time by 82.1% (from 58.0s to 10.4s for 30 symbols)
-- Estimated 6.8 minutes time reduction for full 257 symbols
-- Maintained memory usage within 2GB target
-- Added proactive memory monitoring and garbage collection
-- Created comprehensive performance testing framework
-
-✅ **COMPLETED**: Enhanced Validation Criteria
-- Implemented comprehensive validation system with sector coverage, market cap distribution, geographic diversity, volatility, liquidity, and news coverage
-- Created test script for validation analysis
-- Health score improved to 78.8% with updated criteria
-- Removed mid/small/micro cap requirements from health scoring
-- System now focuses on mega/large cap stocks for production readiness
-
-✅ **COMPLETED**: Parallel Processing Implementation
-- Implemented high-performance parallel data collector with 10 workers
-- Achieved 5.26x speedup over memory-optimized collector (4.7s vs 24.9s for 50 symbols)
-- Full-scale test: 516 symbols collected in 48.26 seconds (100% success rate)
-- Memory usage well controlled (251 MB peak, 125 MB delta)
-- Perfect data consistency with zero differences
-- Ready for production deployment
-
-✅ **COMPLETED**: Error Recovery and Robust Error Handling
-- Implemented comprehensive error recovery system with circuit breaker pattern
-- Added error classification by type and severity (rate_limit, network, authentication, validation, timeout)
-- Created automatic recovery strategies with exponential backoff
-- Integrated graceful degradation with fallback mechanisms
+## Current Goal
+Integrate Finnhub news/sentiment in NewsCollector (phase 2)
 - Enhanced parallel collector with error recovery capabilities
 - Added comprehensive error monitoring and reporting
 - Tested with 6 different error types and recovery strategies
