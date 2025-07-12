@@ -420,6 +420,10 @@ class UnifiedDataCollector:
         
         logger.info(f"Collecting data for {len(symbols)} symbols")
         
+        # Initialize market_summary and sentiment dicts
+        market_summary = {}
+        sentiment = {}
+        
         # Track critical errors
         critical_errors = []
         
@@ -452,16 +456,17 @@ class UnifiedDataCollector:
                 
                 # Sort by percent change
                 data.sort(key=lambda x: x.get('percent_change', 0), reverse=True)
-                
+
                 # Get top winners and losers
                 winners = [stock for stock in data if stock.get('percent_change', 0) > 0][:5]
                 losers = [stock for stock in data if stock.get('percent_change', 0) < 0][:5]
-                
+
                 # Ensure we have enough data for analysis
-                        market_summary['market_sentiment'] = sentiment.get('market_sentiment', 'Mixed')
-                    except:
-                        pass
-                
+                try:
+                    market_summary['market_sentiment'] = sentiment.get('market_sentiment', 'Mixed')
+                except Exception:
+                    pass
+
                 # Get economic calendar data
                 try:
                     economic_data = economic_calendar.get_comprehensive_calendar()
@@ -469,7 +474,7 @@ class UnifiedDataCollector:
                 except Exception as e:
                     logger.warning(f"Failed to get economic calendar data: {str(e)}")
                     market_summary['economic_calendar'] = None
-                
+
                 # Get enhanced news analysis
                 try:
                     enhanced_news = news_collector.get_enhanced_market_news(
@@ -628,18 +633,7 @@ class UnifiedDataCollector:
         """Collect data from Finnhub with global circuit breaker/session disable logic"""
         if self._finnhub_disabled_for_session:
             logger.error(f"Finnhub API disabled for this session after {self._finnhub_failure_threshold} consecutive failures. Skipping all Finnhub requests.")
-            if all_data:
-                logger.info(f"Finnhub collection successful: {len(all_data)} stocks")
-                self._finnhub_consecutive_failures = 0
-                return True, all_data, "Finnhub"
-            else:
-                logger.warning("Finnhub collection returned no data")
-                return False, [], "Finnhub - No data"
-        except Exception as e:
-            self._finnhub_consecutive_failures += 1
-            if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
-                self._finnhub_disabled_for_session = True
-                logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures (exception path).")
+            return False, [], "Finnhub - Disabled"
             logger.error(f"Finnhub collection failed: {str(e)}")
             return False, [], f"Finnhub - {str(e)}"
 

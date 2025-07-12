@@ -33,7 +33,7 @@ class ScriptGenerator:
         lead_host_info = host_manager.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
         supporting_host_info = host_manager.get_host_info(supporting_host)
-        
+
         # Format market data with enhanced information
         winners = market_data.get('winners', [])
         losers = market_data.get('losers', [])
@@ -198,12 +198,20 @@ class ScriptGenerator:
         coverage_percentage = market_summary.get('coverage_percentage', 0)
         
         # Determine market coverage description
+        sp500_coverage_val = market_summary.get('sp500_coverage', 0)
+        nasdaq100_coverage_val = market_summary.get('nasdaq100_coverage', 0)
         if sp500_count > 0 and nasdaq100_count > 0:
             market_coverage_desc = f"Analyzing {sp500_count} S&P 500 and {nasdaq100_count} NASDAQ-100 stocks ({coverage_percentage:.1f}% coverage)"
         elif sp500_count > 0:
             market_coverage_desc = f"Analyzing {sp500_count} S&P 500 stocks"
         elif nasdaq100_count > 0:
             market_coverage_desc = f"Analyzing {nasdaq100_count} NASDAQ-100 stocks"
+        elif sp500_coverage_val > 0 and nasdaq100_coverage_val > 0:
+            market_coverage_desc = f"Analyzing {sp500_coverage_val} S&P 500 and {nasdaq100_coverage_val} NASDAQ-100 stocks (coverage from market_summary)"
+        elif sp500_coverage_val > 0:
+            market_coverage_desc = f"Analyzing {sp500_coverage_val} S&P 500 stocks (coverage from market_summary)"
+        elif nasdaq100_coverage_val > 0:
+            market_coverage_desc = f"Analyzing {nasdaq100_coverage_val} NASDAQ-100 stocks (coverage from market_summary)"
         else:
             market_coverage_desc = market_summary.get('market_coverage', 'Analyzing major US stocks including NASDAQ-100 and S&P 500')
         
@@ -360,6 +368,19 @@ Example Natural Transition:
 {supporting_host_info['name']}: Absolutely! The banking sector has been showing some real resilience lately, and today's moves suggest investors are positioning themselves ahead of the Fed meeting next week."
 
 IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON object.
+"""
+        # Calculate coverage for S&P 500 and NASDAQ-100
+        sp500_expected = len(symbol_loader.get_sp_500_symbols())
+        nasdaq100_expected = len(symbol_loader.get_nasdaq_100_symbols())
+        sp500_coverage = market_summary.get('sp500_coverage', 0)
+        nasdaq100_coverage = market_summary.get('nasdaq100_coverage', 0)
+        # Fallback: if market_summary does not have coverage, use analyzed counts
+        if not sp500_coverage:
+            sp500_coverage = market_summary.get('sp500_analyzed', 0) or 0
+        if not nasdaq100_coverage:
+            nasdaq100_coverage = market_summary.get('nasdaq100_analyzed', 0) or 0
+        # Error handling for insufficient coverage
+        if sp500_coverage < sp500_expected or nasdaq100_coverage < nasdaq100_expected:
             return {
                 'generation_success': False,
                 'error': f'Insufficient index coverage for script generation. S&P 500: {sp500_coverage}/{sp500_expected}, NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected}',
@@ -367,15 +388,21 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                 'lead_host': 'unknown',
                 'estimated_runtime_minutes': 0
             }
-    
+        return prompt
+
     def _generate_mock_script(self, market_data: Dict) -> Dict:
-        """Generate a mock script for test mode"""
+        # Generate a mock script for test mode
         lead_host = host_manager.get_lead_host_for_date()
         lead_host_info = host_manager.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
         supporting_host_info = host_manager.get_host_info(supporting_host)
         
-        # Create a realistic mock script with natural banter
+        # Defensive assignment for market_date to avoid f-string parsing issues
+        if 'market_summary' in market_data and 'market_date' in market_data['market_summary']:
+            mock_market_date = market_data['market_summary']['market_date']
+        else:
+            mock_market_date = datetime.now().isoformat()
+
         mock_script = {
             "intro": f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today.",
             "segments": [
@@ -408,15 +435,13 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             },
             "generation_success": True,
             "lead_host": lead_host,
-            "market_date": market_data.get('market_summary', {}).get('market_date', datetime.now().isoformat()),
+            "market_date": mock_market_date,
             "generation_timestamp": datetime.now().isoformat()
         }
         
         logger.info("Mock script generated successfully for test mode")
         return mock_script
-    
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:
-        """Create structured script from plain text with better host balance"""
         lead_host_info = host_manager.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
         supporting_host_info = host_manager.get_host_info(supporting_host)
@@ -480,7 +505,6 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         }
     
     def _validate_and_enhance_script(self, script_data: Dict, market_data: Dict, lead_host: str) -> Dict:
-        """Validate and enhance the generated script"""
         
         # Ensure required fields exist
         if 'segments' not in script_data:
@@ -508,21 +532,25 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             segment['word_count'] = word_count
             total_words += word_count
         
-        # Add quality metrics
+         # Add quality metrics
         script_data['quality_metrics'] = {
             'total_words': total_words,
             'segments_count': len(script_data.get('segments', [])),
             'technical_indicators_used': self._count_technical_indicators(script_data),
             'news_sources_referenced': self._count_news_sources(script_data)
         }
-        
+
         # Add metadata
         script_data['generation_timestamp'] = datetime.now().isoformat()
         script_data['lead_host'] = lead_host
-        script_data['market_date'] = market_data.get('market_summary', {}).get('market_date', datetime.now().isoformat())
+        market_summary = market_data.get('market_summary', {})
+        if 'market_date' in market_summary:
+            script_data['market_date'] = market_summary['market_date']
+        else:
+            script_data['market_date'] = datetime.now().isoformat()
         script_data['generation_success'] = True
-        
-        return script_data
+
+        return script_data   
     
     def _improve_script_quality(self, script_data: Dict, market_data: Dict, lead_host: str) -> Dict:
         """Attempt to improve script quality when initial score is low"""
@@ -600,15 +628,13 @@ Please fix these issues and return an improved version of the script in the same
 3. Improving transitions between segments
 4. Ensuring proper content length
 5. Maintaining professional financial news tone
-
-Return ONLY the improved JSON script.
 """
     
     def _add_missing_segments(self, script_data: Dict, market_data: Dict, lead_host: str) -> Dict:
         """Add missing segments to meet minimum requirements"""
         current_segments = script_data.get('segments', [])
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
-        
+
         # Define additional segment topics
         additional_topics = [
             "Sector Analysis",
@@ -616,12 +642,11 @@ Return ONLY the improved JSON script.
             "Market Sentiment",
             "Trading Volume Analysis"
         ]
-        
+
         # Add segments until we have at least 6
         while len(current_segments) < 6:
             topic = additional_topics[len(current_segments) - len(script_data.get('segments', []))]
             host = supporting_host if len(current_segments) % 2 == 1 else lead_host
-            
             new_segment = {
                 "host": host,
                 "text": f"This segment covers {topic.lower()}. Additional analysis will be provided here.",
@@ -629,40 +654,33 @@ Return ONLY the improved JSON script.
                 "word_count": 150
             }
             current_segments.append(new_segment)
-        
+
         script_data['segments'] = current_segments
         return script_data
-    
+
     def _count_technical_indicators(self, script_data: Dict) -> int:
         """Count technical indicators mentioned in the script"""
         all_text = self._extract_all_text(script_data).lower()
         indicators = ['rsi', 'macd', 'volume', 'moving average', 'support', 'resistance', 'crossover']
         count = sum(all_text.count(indicator) for indicator in indicators)
         return count
-    
-    def _count_news_sources(self, script_data: Dict) -> int:
-        """Count news sources referenced in the script"""
-        all_text = self._extract_all_text(script_data).lower()
-        sources = ['analyst', 'report', 'earnings', 'announcement', 'news', 'statement']
-        count = sum(all_text.count(source) for source in sources)
-        return count
-    
+
     def _extract_all_text(self, script_data: Dict) -> str:
         """Extract all text content from script"""
         text_parts = []
-        
+
         # Add intro
         if 'intro' in script_data:
             intro_text = script_data['intro']
             if isinstance(intro_text, str):
                 text_parts.append(intro_text)
-        
+
         # Add market overview
         if 'market_overview' in script_data:
             overview_text = script_data['market_overview']
             if isinstance(overview_text, str):
                 text_parts.append(overview_text)
-        
+
         # Add winner segments
         for segment in script_data.get('winner_segments', []):
             if isinstance(segment, dict):
@@ -671,7 +689,7 @@ Return ONLY the improved JSON script.
                     text_parts.append(segment_text)
             elif isinstance(segment, str):
                 text_parts.append(segment)
-        
+
         # Add loser segments
         for segment in script_data.get('loser_segments', []):
             if isinstance(segment, dict):
@@ -680,25 +698,28 @@ Return ONLY the improved JSON script.
                     text_parts.append(segment_text)
             elif isinstance(segment, str):
                 text_parts.append(segment)
-        
+
         # Add market sentiment
         if 'market_sentiment' in script_data:
             sentiment_text = script_data['market_sentiment']
             if isinstance(sentiment_text, str):
                 text_parts.append(sentiment_text)
-        
+
         # Add outro
         if 'outro' in script_data:
             outro_text = script_data['outro']
             if isinstance(outro_text, str):
                 text_parts.append(outro_text)
-        
+
         return ' '.join(text_parts)
-    
+
     def format_script_for_output(self, script_data: Dict) -> str:
-        """Format the script for human-readable output"""
+        """
+        Format the script for human-readable output.
+        """
         if not script_data.get('generation_success', False):
             return f"Script generation failed: {script_data.get('error', 'Unknown error')}"
+
         
         output = []
         output.append("=" * 80)
@@ -828,5 +849,4 @@ Return ONLY the improved JSON script.
         return "\n".join(output)
 
 
-# Global instance
-script_generator = ScriptGenerator() 
+script_generator = ScriptGenerator()

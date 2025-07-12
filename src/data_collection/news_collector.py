@@ -330,42 +330,9 @@ class NewsCollector:
             if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
                 self._biztoc_disabled_for_session = True
                 logger.error(f"Biztoc API disabled for the remainder of this session after {self._biztoc_failure_threshold} consecutive failures.")
-            logger.error(f"Biztoc search failed: {str(e)}")
-            return []
-
-    def _get_biztoc_trending(self, limit: int = 5) -> List[Dict]:
-        """Get trending business news from Biztoc"""
-        if self._biztoc_disabled_for_session:
-            logger.error(f"Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
-            return []
-        try:
-            url = f"https://biztoc.p.rapidapi.com/trending"
-            headers = {
-                "X-RapidAPI-Key": self.rapidapi_key,
-                "X-RapidAPI-Host": self.rapidapi_host
-            }
-            params = {
-                "limit": str(limit)
-            }
-            
-            response = requests.get(url, headers=headers, params=params, timeout=15)
-            response.raise_for_status()
-            
-            data = response.json()
-            if isinstance(data, dict):
-                return data.get('results', [])
-            elif isinstance(data, list):
-                return data
-            return []
-            
-        except Exception as e:
-            self._biztoc_consecutive_failures += 1
-            if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
-                self._biztoc_disabled_for_session = True
-                logger.error(f"Biztoc API disabled for the remainder of this session after {self._biztoc_failure_threshold} consecutive failures.")
             logger.error(f"Biztoc trending failed: {str(e)}")
             return []
-    
+
     def _get_biztoc_market_news(self, limit: int = 5) -> List[Dict]:
         """Get market-specific news from Biztoc"""
         if self._biztoc_disabled_for_session:
@@ -380,10 +347,15 @@ class NewsCollector:
             params = {
                 "limit": str(limit)
             }
-            
+            logger.info(f"[MARKET] About to call Biztoc API: {url} with headers: {headers} and params: {params}")
+            print(f"[MARKET] About to call Biztoc API: {url} with headers: {headers} and params: {params}")
             response = requests.get(url, headers=headers, params=params, timeout=15)
+            logger.info(f"[MARKET] Biztoc API {url} status: {response.status_code}")
+            logger.info(f"[MARKET] Biztoc API {url} response: {response.text}")
+            print(f"[MARKET] Biztoc API {url} status: {response.status_code}")
+            print(f"[MARKET] Biztoc API {url} response: {response.text}")
             response.raise_for_status()
-            
+
             data = response.json()
             if isinstance(data, dict):
                 return data.get('articles', [])
@@ -393,7 +365,7 @@ class NewsCollector:
         except Exception as e:
             logger.debug(f"Biztoc market news failed: {str(e)}")
             return []
-    
+
     def _get_biztoc_company_news(self, symbol: str, limit: int = 5) -> List[Dict]:
         """Get company-specific news from Biztoc (if endpoint available)"""
         try:
@@ -401,37 +373,6 @@ class NewsCollector:
             headers = {
                 "X-RapidAPI-Key": self.rapidapi_key,
                 "X-RapidAPI-Host": self.rapidapi_host
-            }
-            params = {
-                "limit": str(limit)
-            }
-            
-            response = requests.get(url, headers=headers, params=params, timeout=15)
-            response.raise_for_status()
-            
-            data = response.json()
-            if isinstance(data, dict):
-                return data.get('articles', [])
-            elif isinstance(data, list):
-                return data
-            return []
-            
-        except Exception as e:
-            logger.debug(f"Biztoc company news failed: {str(e)}")
-            return []
-    
-    def get_comprehensive_company_news(self, symbol: str, company_name: str, percent_change: float) -> Dict:
-        """Get comprehensive news for a company using multiple sources including free scraping"""
-        try:
-            news_data = {
-                'symbol': symbol,
-                'company_name': company_name,
-                'percent_change': percent_change,
-                'articles': [],
-                'summary': '',
-                'catalysts': [],
-                'collection_success': False,
-                'sources_used': []
             }
             
             all_articles = []
