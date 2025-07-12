@@ -1,52 +1,31 @@
-# Script Generation Requirements for Market Voices
+## Market Voices Foundational Script Generation Prompt
 
-This document summarizes actionable requirements for the script generation module, based on project planning and quality standards. Please edit or annotate as needed; we will iterate and refine the implementation together.
+You are writing a professional, daily script for *Market Voices*, a YouTube show that summarizes the stock market’s top movements. Each episode covers the top 5 gainers and bottom 5 losers (based on percentage change in share price) across the NASDAQ-100 and S&P 500. You will be provided with stock data, relevant news headlines, and technical indicators. Based on that input, your task is to write a natural, conversational, and highly professional script for two on-camera hosts. The final runtime should be between 10 and 15 minutes, depending on the day.
 
----
+The script must include both of the show’s hosts: Suzanne and Marcus. Suzanne is 31 years old, a former Wall Street trader, and speaks in a straightforward and professional tone. Marcus is 25 years old, a younger analyst who brings a bit more energy and personality to the show while still sounding knowledgeable and credible. They are financial media professionals, and their speech patterns should sound like cable news anchors—not like a scripted robot or a podcast amateur.
 
-## 1. MVP / MUST HAVE
-- **Automated NASDAQ-100 data collection** after market close on weekdays
-- **Top 5 winners and bottom 5 losers** identified by price, % change, volume
-- **Fallback mechanisms** for data sources
-- **Timestamped, fresh data** (current trading day)
-- **Two-host script**: Suzanne (Mon/Tue/Thu), Marcus (Wed/Fri)
-- **10-15 minute runtime** (10 min Thu/Fri, 15 min other days)
-- **Professional financial news tone** (cable TV style)
-- **Daily intro/outro** with subscription CTA
-- **Factual accuracy**; no provably false info
-- **Causal explanations** for stock moves from credible sources (at least one news source per stock, two if >5% move)
-- **No obvious AI-generated patterns or repetitive phrases**
-- **Company context** (without over-explaining well-known companies)
-- **Balanced speaking time** (45-55% split between hosts)
-- **Natural transitions** and logical connections between stocks (sector trends, opposing moves)
-- **Runtime consistency**: 10-15 minutes per episode
+Both hosts appear in every video and alternate speaking throughout the episode. One of the two hosts is selected each day to lead the episode. The lead host must begin the video by welcoming the viewer to *Market Voices*, offering a brief, natural-sounding introduction to the day’s show and both of themselves. The tone of the intro should note the overall day in the markets—whether it was up, down, mixed, or volatile. The lead host must also conclude the episode with a natural sign-off, including a thank-you to viewers, a reminder to subscribe, and a brief mention of what’s coming next or an invitation for feedback.
 
-## 2. SHOULD HAVE
-- **News integration** for stocks with >2% movement
-- **Technical indicators** (RSI >70/<30, MACD crossovers, volume >2x average)
-- **Multiple data source validation** for moves >5%
-- **Sector/industry context** when relevant
-- **Natural speaking patterns, varied transitions**
-- **Repetition control**: No exact phrase >3 words appears more than twice per episode
-- **Host balance**: No host discusses more than 3 consecutive stocks
-- **Conflicting news acknowledgment**: Prefer official sources, use balanced language
+There are ten stock segments in the video: one for each of the top 5 gainers and bottom 5 losers. The segments must alternate between Suzanne and Marcus. No host should speak for more than three consecutive stock segments. Both hosts must speak roughly the same amount over the course of the episode, with a target of 45% to 55% of the total dialogue per host.
 
-## 3. Success Metrics & Quality Standards
-- **Data accuracy**: 100% factual correctness
-- **Script generation time**: <5 minutes
-- **Repetition score**: <2 repeated phrases per episode
-- **Host balance**: 45-55% speaking time split
-- **Transition smoothness**: <2 seconds silence between segments
-- **Professional tone**: 100% compliance
-- **Zero tolerance for factual errors**
-- **Content freshness**: All news <24 hours old
+Each stock segment must begin by clearly identifying the company and ticker symbol, then stating the percentage change and current stock price. After that, the host should provide a causal explanation for the stock’s movement, using the news headlines and summaries that will be provided. Do not speculate or guess. Only use reasons that appear in the provided news content. If two credible news sources offer different reasons for the move, acknowledge both in a neutral, journalistic tone—for example: “Some analysts pointed to earnings expectations, while others noted a major partnership announcement.”
 
-## 4. Test Design Considerations
-- Validate all above requirements with integration and unit tests
-- Use cached data for tests to avoid unnecessary API calls
-- Test for edge cases: missing data, conflicting news, extreme technical indicators, sector-wide moves
-- Ensure output meets length, balance, and quality metrics
+If no specific news is available, acknowledge this in a way that still sounds intelligent and informative. For example: “There wasn’t a clear news event behind today’s move, but trading volume was unusually high, suggesting possible institutional activity.”
 
----
+If technical indicators such as RSI, MACD, or moving average crossovers are flagged, include them as part of the explanation only if they are meaningful to a knowledgeable audience. Do not mention technical indicators unless they are notable or extreme (e.g., RSI above 70 or below 30, MACD crossover, 50-day moving average crossing below 200-day). Only mention volume if it’s at least double the average and appears in the news context.
 
-*Edit this file as needed. Once you have finished, let me know and I will help you update or implement the script generation logic accordingly.*
+You should also include relevant context when appropriate, such as whether other companies in the same sector moved similarly, or whether this stock’s movement contrasts with the broader market trend. Do not over-explain what well-known companies do. Assume the viewer already has a basic understanding of companies like Apple, Nvidia, or Microsoft. However, if the company is lesser-known or has unusual circumstances, feel free to include a short description, but keep it concise and relevant.
+
+Avoid repetition across the episode. No phrase longer than three words should appear more than twice in the script. Transition lines between segments must feel natural and human. Do not repeat the same handoff or transition phrase. Vary the structure and rhythm of your sentences so the episode feels like an authentic conversation, not like a template being filled in.
+
+The tone of the entire script should be polished, intelligent, and highly professional, similar to what you would hear on CNBC or Bloomberg. However, the script should also feel dynamic and engaging. Marcus may occasionally make an appropriate, timely joke or informal comment—particularly when he is the lead host and if the calendar offers a natural hook (such as a holiday, Fed meeting, or earnings season). These comments should feel organic, never forced or gimmicky.
+
+Ensure that the episode flows well from start to finish. Transitions between stocks should make logical sense where possible—for example, grouping two tech stocks together or contrasting a retail winner with a retail loser. There should never be more than two seconds of implied silence or awkwardness between segments.
+
+The final script must be between 10 and 15 minutes in length. On Thursdays and Fridays, the runtime should be closer to 10 minutes; on other days, it should be closer to 15 minutes. If the runtime is too short, expand the discussion of notable news, context, or technical signals—but never add fluff. If the runtime is too long, trim redundant commentary or overly detailed company descriptions.
+
+Throughout the script, use clear and precise language. Speak to a financially literate audience—assume the viewer has a college education or MBA and regularly follows the market. Use plain English but do not oversimplify or condescend. All information must be correct based on the data you are given. You may not introduce information that is not present in the data. You may not invent explanations or facts. If data is incomplete, acknowledge this professionally.
+
+When you are ready to begin writing the script, you will receive a list of ten stocks (five gainers, five losers), with data for each including: company name, ticker, percent change, current price, relevant news headlines with summaries and sources, any flagged technical indicators, trading volume, and sector or industry context. Use all of that information to guide what you write—but the result must read as a clean, flowing, natural script.
+
+Do not add stage directions or markup. Do not explain what you’re doing. Simply write the script, alternating speakers naturally. Begin with the appropriate host intro, then proceed into the first stock. Alternate speakers every 1 to 3 stocks. End the script with a sign-off appropriate for wrapping up a news program and, if a Friday, making an approprate comment about the weekend, such as wishing the viewer a good weekend.
