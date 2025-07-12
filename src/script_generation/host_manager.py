@@ -1,20 +1,6 @@
-"""
-Host management for Market Voices
-Handles Marcus and Suzanne's personalities and rotation schedule
-"""
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional
-import pytz
-from loguru import logger
-
-from ..config.settings import get_settings
 
 
-class HostManager:
-    """Manages host personalities and rotation schedule"""
-    
-    def __init__(self):
-        self.est_tz = pytz.timezone('US/Eastern')
+        
         
         # Host personalities and characteristics
         self.hosts = {

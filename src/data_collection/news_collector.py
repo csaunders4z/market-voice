@@ -329,14 +329,13 @@ class NewsCollector:
             self._biztoc_consecutive_failures += 1
             if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
                 self._biztoc_disabled_for_session = True
-                logger.error(f"Biztoc API disabled for the remainder of this session after {self._biztoc_failure_threshold} consecutive failures.")
-            logger.error(f"Biztoc trending failed: {str(e)}")
-            return []
 
     def _get_biztoc_market_news(self, limit: int = 5) -> List[Dict]:
         """Get market-specific news from Biztoc"""
+        logger.info("[MARKET] Entry: _get_biztoc_market_news")
         if self._biztoc_disabled_for_session:
-            logger.error(f"Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
+            logger.error(f"[MARKET] Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
+            print("[MARKET] Biztoc API disabled for this session. Skipping request.")
             return []
         try:
             url = f"https://{self.rapidapi_host}/market"
@@ -363,93 +362,12 @@ class NewsCollector:
                 return data
             return []
         except Exception as e:
-            logger.debug(f"Biztoc market news failed: {str(e)}")
+            logger.error(f"[MARKET] Biztoc market news failed: {str(e)}")
+            print(f"[MARKET] Biztoc market news failed: {str(e)}")
             return []
-
-    def _get_biztoc_company_news(self, symbol: str, limit: int = 5) -> List[Dict]:
-        """Get company-specific news from Biztoc (if endpoint available)"""
-        try:
-            url = f"https://{self.rapidapi_host}/company/{symbol}"
-            headers = {
-                "X-RapidAPI-Key": self.rapidapi_key,
-                "X-RapidAPI-Host": self.rapidapi_host
-            }
-            
-            all_articles = []
-            
-            # 1. Try free news scraper first (most comprehensive)
-            if FREE_NEWS_AVAILABLE:
-                try:
-                    free_articles = stock_news_scraper.get_comprehensive_stock_news(symbol, max_articles=15)
-                    if free_articles:
-                        # Convert NewsArticle objects to dicts
-                        for article in free_articles:
-                            all_articles.append({
-                                'title': article.title,
-                                'description': article.description,
-                                'content': article.content,
-                                'url': article.url,
-                                'source': article.source,
-                                'published_at': article.published_at,
-                                'author': article.author,
-                                'relevance_score': article.relevance_score,
-                                'word_count': article.word_count
-                            })
-                        news_data['sources_used'].append('free_scraper')
-                        logger.info(f"Free scraper collected {len(free_articles)} articles for {symbol}")
-                except Exception as e:
-                    logger.warning(f"Free scraper failed for {symbol}: {str(e)}")
-            
-            # 2. Get paid API news as supplement, including Finnhub
-            try:
-                api_news = self.get_newsapi_news(symbol, 48)
-                biztoc_news = self.get_biztoc_news(symbol, 48)
-                finnhub_news = finnhub_news_adapter.get_company_news(symbol)
-                
-                api_articles = api_news + biztoc_news + finnhub_news
-                if api_articles:
-                    all_articles.extend(api_articles)
-                    news_data['sources_used'].extend(['newsapi', 'biztoc', 'finnhub'])
-                    logger.info(f"API sources collected {len(api_articles)} additional articles for {symbol}")
-            except Exception as e:
-                logger.warning(f"API news collection failed for {symbol}: {str(e)}")
-            
-            # 3. Process and analyze articles
-            if all_articles:
-                # Sort by relevance
-                sorted_articles = sorted(all_articles, key=lambda x: x.get('relevance_score', 0), reverse=True)
-                news_data['articles'] = sorted_articles[:10]  # Top 10 most relevant
-                
-                # Create comprehensive summary
-                top_article = sorted_articles[0]
-                news_data['summary'] = self._create_news_summary(sorted_articles[:3], symbol)
-                
-                # Identify potential catalysts
-                news_data['catalysts'] = self._identify_news_catalysts(sorted_articles[:5])
-                
-                news_data['collection_success'] = True
-                logger.info(f"Comprehensive news collection for {symbol}: {len(sorted_articles)} articles, {len(news_data['catalysts'])} catalysts identified")
-            
-            return news_data
-            
-        except Exception as e:
-            logger.error(f"Error in comprehensive news collection for {symbol}: {str(e)}")
-            return {
-                'symbol': symbol,
-                'collection_success': False,
-                'error': str(e),
-                'articles': [],
-                'summary': '',
-                'catalysts': []
-            }
-    
-    def get_company_news_summary(self, symbol: str, company_name: str, percent_change: float) -> str:
-        """Get a concise news summary for a specific company"""
-        try:
-            # ENHANCED: Collect news for ALL significant movers (reduced threshold from 3% to 1%)
-            # This ensures we have explanatory content for more stocks
-            if abs(percent_change) < 1:
-                return ""
+        finally:
+            logger.info("[MARKET] Exit: _get_biztoc_market_news")
+            print("[MARKET] Exit: _get_biztoc_market_news")
             
             # Use comprehensive collection first
             comprehensive_news = self.get_comprehensive_company_news(symbol, company_name, percent_change)
@@ -482,9 +400,7 @@ class NewsCollector:
             else:
                 return ""
                 
-        except Exception as e:
-            logger.error(f"Error getting news summary for {symbol}: {str(e)}")
-            return ""
+
     
     def _create_news_summary(self, articles: List[Dict], symbol: str) -> str:
         """Create a comprehensive news summary from multiple articles"""

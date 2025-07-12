@@ -3,7 +3,7 @@ Script generator for Market Voices
 Uses OpenAI to create professional financial news scripts
 """
 import openai
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import json
 import re
@@ -12,12 +12,12 @@ import os
 
 from ..config.settings import get_settings
 from ..content_validation.quality_controls import quality_controller
-from .host_manager import host_manager
+
 from ..data_collection.symbol_loader import symbol_loader
 
 
 class ScriptGenerator:
-    """Generates professional financial news scripts using OpenAI"""
+    """Generates professional financial news scripts using OpenAI and manages host personalities and rotation schedule"""
     
     def __init__(self):
         self.settings = get_settings()
@@ -25,14 +25,180 @@ class ScriptGenerator:
         self.model = self.settings.openai_model
         self.max_tokens = self.settings.max_tokens
         self.temperature = self.settings.temperature
+        import pytz
+        self.est_tz = pytz.timezone('US/Eastern')
+        # Host personalities and characteristics
+        self.hosts = {
+            'marcus': {
+                'name': 'Marcus',
+                'age': 25,
+                'personality': self.settings.marcus_personality,
+                'tone': 'energetic and enthusiastic',
+                'style': 'fresh perspective, tech-savvy, millennial approach',
+                'background': 'energetic analyst with a fresh perspective on markets',
+                'speaking_patterns': [
+                    "Hey everyone, Marcus here!",
+                    "This is really interesting to see...",
+                    "What's fascinating about this is...",
+                    "I'm excited to dive into...",
+                    "This could be a game-changer...",
+                    "Let me break this down for you...",
+                    "Here's what caught my attention..."
+                ],
+                'transitions': [
+                    "Now, let's shift gears to...",
+                    "Speaking of interesting moves...",
+                    "This brings us to...",
+                    "On the flip side...",
+                    "Meanwhile, over in...",
+                    "Let's not forget about..."
+                ]
+            },
+            'suzanne': {
+                'name': 'Suzanne',
+                'age': 31,
+                'personality': self.settings.suzanne_personality,
+                'tone': 'professional and analytical',
+                'style': 'experienced trader perspective, deep market knowledge',
+                'background': 'former Wall Street trader with deep market knowledge',
+                'speaking_patterns': [
+                    "Good evening, I'm Suzanne.",
+                    "From a trading perspective...",
+                    "What we're seeing here is...",
+                    "This movement suggests...",
+                    "The market is telling us...",
+                    "Let me analyze this for you...",
+                    "This is significant because..."
+                ],
+                'transitions': [
+                    "Moving on to...",
+                    "Another notable development...",
+                    "This connects to...",
+                    "In contrast...",
+                    "Additionally...",
+                    "It's also worth noting..."
+                ]
+            }
+        }
+
+    def get_lead_host_for_date(self, date: Optional[datetime] = None) -> str:
+        """Determine which host leads for a given date"""
+        if date is None:
+            date = datetime.now(self.est_tz)
+        weekday = date.weekday()  # Monday = 0, Tuesday = 1, etc.
+        # Suzanne leads: Monday (0), Tuesday (1), Thursday (3)
+        # Marcus leads: Wednesday (2), Friday (4)
+        if weekday in [0, 1, 3]:  # Mon, Tue, Thu
+            return 'suzanne'
+        else:  # Wed, Fri
+            return 'marcus'
+
+    def get_host_info(self, host_key: str) -> Dict:
+        """Get host information and personality"""
+        return self.hosts.get(host_key, {})
+
+    def get_both_hosts_info(self) -> Tuple[Dict, Dict]:
+        """Get information for both hosts"""
+        lead_host = self.get_lead_host_for_date()
+        supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
+        return self.hosts[lead_host], self.hosts[supporting_host]
+
+    def get_host_rotation_schedule(self) -> Dict:
+        """Get the weekly host rotation schedule"""
+        return {
+            'monday': 'suzanne',
+            'tuesday': 'suzanne', 
+            'wednesday': 'marcus',
+            'thursday': 'suzanne',
+            'friday': 'marcus'
+        }
+
+    def get_target_runtime(self, date: Optional[datetime] = None) -> int:
+        """Get target runtime for a given date"""
+        if date is None:
+            date = datetime.now(self.est_tz)
+        weekday = date.weekday()
+        # Thursday and Friday: 10 minutes
+        # Other days: 15 minutes
+        if weekday in [3, 4]:  # Thu, Fri
+            return 10
+        else:
+            return 15
+
+    def get_intro_template(self, lead_host: str) -> str:
+        """Get intro template for the lead host"""
+        host_info = self.hosts[lead_host]
+        intro_templates = {
+            'marcus': (
+                "Hey everyone, Marcus here! Welcome to Market Voices, your daily "
+                "dive into what's moving the major US markets. I'm excited to break down "
+                "today's biggest winners and losers with you."
+            ),
+            'suzanne': (
+                "Good evening, I'm Suzanne. Welcome to Market Voices, where we "
+                "analyze the day's major US market performance with the perspective "
+                "of experienced market professionals."
+            )
+        }
+        return intro_templates.get(lead_host, "")
+
+    def get_outro_template(self, lead_host: str) -> str:
+        """Get outro template for the lead host"""
+        host_info = self.hosts[lead_host]
+        outro_templates = {
+            'marcus': (
+                "That wraps up today's market analysis! Don't forget to subscribe "
+                "for daily insights, and I'll see you tomorrow for more market action. "
+                "This is Marcus, signing off!"
+            ),
+            'suzanne': (
+                "Thank you for joining us today. Remember to subscribe for your "
+                "daily market intelligence, and we'll be back tomorrow with more "
+                "analysis. This is Suzanne, good evening."
+            )
+        }
+        return outro_templates.get(lead_host, "")
+
+    def get_host_transition(self, from_host: str, to_host: str, context: str = "") -> str:
+        """Generate a transition between hosts"""
+        from_info = self.hosts[from_host]
+        to_info = self.hosts[to_host]
+        transitions = [
+            f"Now let me hand it over to {to_info['name']} for more analysis.",
+            f"{to_info['name']}, what's your take on this?",
+            f"Let me bring in {to_info['name']} for additional perspective.",
+            f"{to_info['name']}, I'd love to hear your thoughts on this."
+        ]
+        return transitions[0]  # For now, use the first transition
+
+    def validate_speaking_time_balance(self, script_segments: List[Dict]) -> bool:
+        """Validate that speaking time is balanced between hosts"""
+        marcus_time = 0
+        suzanne_time = 0
+        for segment in script_segments:
+            if segment.get('host') == 'marcus':
+                marcus_time += len(segment.get('text', '').split())
+            elif segment.get('host') == 'suzanne':
+                suzanne_time += len(segment.get('text', '').split())
+        total_words = marcus_time + suzanne_time
+        if total_words == 0:
+            return True
+        marcus_ratio = marcus_time / total_words
+        suzanne_ratio = suzanne_time / total_words
+        # Check if ratios are within tolerance (45-55% each)
+        tolerance = self.settings.speaking_time_tolerance
+        balanced = (0.45 <= marcus_ratio <= 0.55) and (0.45 <= suzanne_ratio <= 0.55)
+        logger.info(f"Speaking time balance - Marcus: {marcus_ratio:.2%}, Suzanne: {suzanne_ratio:.2%}")
+        return balanced
+
         
     def create_script_prompt(self, market_data: Dict, lead_host: str) -> str:
         """Create the prompt for script generation with enhanced analysis"""
         
         # Get host information
-        lead_host_info = host_manager.get_host_info(lead_host)
+        lead_host_info = self.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
-        supporting_host_info = host_manager.get_host_info(supporting_host)
+        supporting_host_info = self.get_host_info(supporting_host)
 
         # Format market data with enhanced information
         winners = market_data.get('winners', [])
@@ -230,145 +396,31 @@ MARKET OVERVIEW:
 {free_news_text}
 """
         
+        # Load requirements from external markdown file
+        requirements_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../planning/script_generation_requirements.md'))
+        try:
+            with open(requirements_path, 'r', encoding='utf-8') as req_file:
+                requirements_md = req_file.read()
+                logger.info(f"Loaded requirements from {requirements_path}")
+        except Exception as e:
+            logger.warning(f"Could not load requirements from {requirements_path}: {e}. Falling back to built-in requirements.")
+            # Fallback: Use the previously hardcoded requirements
+            requirements_md = (
+                "CRITICAL REQUIREMENTS - READ CAREFULLY:\n"
+                "1. ABSOLUTE MINIMUM 1440 WORDS TOTAL - This is non-negotiable\n"
+                "2. You MUST write EXACTLY 10 stock segments (5 winners + 5 losers)\n"
+                "3. Each stock segment MUST be 100-120 words minimum\n"
+                "4. Total stock segments must be 1000-1200 words\n"
+                "5. Intro: 200 words, Market Overview: 150 words, Market Sentiment: 100 words, Outro: 150 words\n"
+                "6. Speaking time: 45-55% split between hosts\n"
+                "7. Use varied language - avoid repetitive phrases like 'we will', 'let's look at', etc.\n"
+                "8. Include specific data points, percentages, and technical indicators\n"
+                "9. Reference actual news events and analyst actions\n"
+                "10. Professional financial news tone\n"
+                "(See documentation for full requirements.)"
+            )
         prompt = f"""
-You are writing a professional financial news script for "Market Voices," a daily analysis show covering major US stocks including NASDAQ-100 and S&P 500 companies. Create a comprehensive, engaging script that explains market movements with specific details and analysis.
-
-HOSTS:
-- {lead_host_info['name']} ({lead_host_info['age']}): {lead_host_info['personality']}
-- {supporting_host_info['name']} ({supporting_host_info['age']}): {supporting_host_info['personality']}
-
-TODAY'S MARKET DATA:
-{enhanced_summary}
-
-TOP 5 WINNERS (with detailed analysis):
-{winners_text}
-
-TOP 5 LOSERS (with detailed analysis):
-{losers_text}
-
-CRITICAL REQUIREMENTS - READ CAREFULLY:
-1. ABSOLUTE MINIMUM 1440 WORDS TOTAL - This is non-negotiable
-2. You MUST write EXACTLY 10 stock segments (5 winners + 5 losers)
-3. Each stock segment MUST be 100-120 words minimum
-4. Total stock segments must be 1000-1200 words
-5. Intro: 200 words, Market Overview: 150 words, Market Sentiment: 100 words, Outro: 150 words
-6. Speaking time: 45-55% split between hosts
-7. Use varied language - avoid repetitive phrases like "we will", "let's look at", etc.
-8. Include specific data points, percentages, and technical indicators
-9. Reference actual news events and analyst actions
-10. Professional financial news tone
-
-HOST INTERACTION GUIDELINES:
-- DO NOT have hosts identify their jobs or backgrounds during the broadcast
-- Create natural, conversational banter between hosts in the intro and transitions
-- Use the hosts' personalities to create engaging dialogue
-- {lead_host_info['name']}: {lead_host_info['personality']} - {lead_host_info['tone']}
-- {supporting_host_info['name']}: {supporting_host_info['personality']} - {supporting_host_info['tone']}
-- Include light banter about market mood, interesting moves, or observations
-- Make transitions feel natural and conversational, not robotic
-
-NEWS INTEGRATION REQUIREMENTS:
-- ALWAYS reference specific news sources and events to explain stock movements
-- Use the provided news data to explain WHY stocks moved, not just WHAT happened
-- Reference specific articles, analyst reports, earnings news, or market events
-- Connect stock movements to broader market themes and sector trends
-- Use news data to provide context for volume patterns and price action
-- Each stock segment MUST explain the catalyst or reason behind the price movement
-- Cite specific news sources (Reuters, Bloomberg, etc.) when available
-- If no specific news is available, explain the technical or market context
-
-LANGUAGE REQUIREMENTS:
-- AVOID repetitive phrases like "we will", "let's look at", "in this segment", "moving on", "next up"
-- Use varied transitions: "meanwhile", "conversely", "additionally", "furthermore", "on the flip side"
-- Vary sentence structure and length for natural flow
-- Use specific financial terminology appropriately
-- Create engaging, dynamic content that flows naturally
-
-STOCK SEGMENT REQUIREMENTS (100-120 words each):
-For each stock, you MUST include:
-- Natural host introduction and stock identification
-- Price movement and volume analysis with specific percentages
-- SPECIFIC news catalysts (reference actual news sources provided)
-- Technical analysis (RSI, MACD, support/resistance if available)
-- Market context and sector impact
-- Forward-looking analysis and what to watch for
-
-MOST IMPORTANT: EXPLAIN WHY EACH STOCK MOVED THE WAY IT DID
-For each stock segment, you MUST explain:
-- What specific news, events, or catalysts drove the price movement (use provided news data)
-- How market sentiment and sector trends influenced the stock
-- What analysts and experts are saying about the move (reference specific sources)
-- What the trading volume tells us about investor behavior
-- How this fits into broader market themes (AI, rate cuts, earnings, etc.)
-- What to watch for in the coming days/weeks
-
-If you lack specific information about why a stock moved, use available data to make educated analysis:
-- Recent earnings reports and guidance
-- Sector rotation and market themes
-- Technical indicators and price action
-- Analyst ratings and price target changes
-- Insider trading activity
-- Upcoming catalysts (earnings, product launches, etc.)
-- Macroeconomic factors (Fed policy, economic data, etc.)
-
-CRITICAL: DO NOT WRITE OUTLINES OR DESCRIPTIONS. WRITE THE ACTUAL ANALYSIS CONTENT.
-CRITICAL: ENSURE EACH STOCK SEGMENT IS 100-120 WORDS MINIMUM.
-CRITICAL: ENSURE TOTAL SCRIPT IS 1440+ WORDS.
-
-WORD COUNT BREAKDOWN (MINIMUM 1440 WORDS TOTAL):
-- Intro: 200 words (natural host banter and market mood discussion)
-- Market Overview: 150 words (brief market summary and key themes)
-- Top 5 Winners: 5 segments, 100-120 words each (500-600 words total)
-- Top 5 Losers: 5 segments, 100-120 words each (500-600 words total)
-- Market Sentiment: 100 words (overall market sentiment analysis)
-- Outro: 150 words (closing remarks and preview of next session)
-
-CONTENT STRUCTURE (JSON):
-{{
-    "intro": "Natural host banter and market mood discussion (200 words)",
-    "market_overview": "Market and economic context (150 words)",
-    "winner_segments": [
-        {{"host": "{lead_host}", "stock": "WINNER1", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{supporting_host}", "stock": "WINNER2", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{lead_host}", "stock": "WINNER3", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{supporting_host}", "stock": "WINNER4", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{lead_host}", "stock": "WINNER5", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}}
-    ],
-    "loser_segments": [
-        {{"host": "{supporting_host}", "stock": "LOSER1", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{lead_host}", "stock": "LOSER2", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{supporting_host}", "stock": "LOSER3", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{lead_host}", "stock": "LOSER4", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}},
-        {{"host": "{supporting_host}", "stock": "LOSER5", "text": "Detailed analysis explaining WHY the stock moved (100-120 words)"}}
-    ],
-    "market_sentiment": "Overall market sentiment analysis (100 words)",
-    "outro": "Closing remarks and preview of next session (150 words)"
-}}
-
-EXAMPLES OF GOOD CONTENT WITH "WHY" ANALYSIS:
-
-Example Intro with Natural Banter (200 words):
-"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had on the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.
-
-{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.
-
-{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.
-
-{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
-
-Example Winner Segment with News Integration (120+ words):
-"Alphabet Inc. (GOOGL) surged 2.88% today, outperforming the broader market indices. The rally was driven by multiple catalysts: First, Reuters reported that Alphabet announced a $10 billion investment in AI infrastructure, positioning the company at the forefront of the ongoing AI arms race. This comes as investors are increasingly focused on AI leadership, with Microsoft and other tech giants also making significant AI investments. Second, the company's recent earnings report showed a 28% year-over-year jump in Google Cloud revenue, exceeding analyst expectations. Third, analysts from Benzinga and Seeking Alpha have raised their price targets, citing strong demand for AI-powered services and the company's dominant position in search advertising. Volume was 2.5 times the average, suggesting institutional investors are building positions ahead of next week's earnings. The move also reflects broader market rotation into growth stocks as the Federal Reserve signals potential rate cuts. Looking ahead, the upcoming earnings call will be a key catalyst, with analysts expecting continued momentum in cloud and AI segments."
-
-Example Loser Segment with News Integration (120+ words):
-"Tesla Inc. (TSLA) declined 0.66% today, underperforming its tech peers. The drop was primarily driven by regulatory concerns: Bloomberg reported that the National Highway Traffic Safety Administration is expanding its investigation into Tesla's Autopilot system, raising concerns about potential recalls or regulatory restrictions that could impact future sales. This regulatory scrutiny comes at a critical time as Tesla prepares to launch its Cybertruck and faces increasing competition in the EV space. Despite the setback, analysts remain divided: some, like those at CNBC, see the dip as a buying opportunity given Tesla's strong fundamentals and upcoming product launches, while others warn of increased regulatory headwinds that could slow growth. Trading volume was 1.8 times the average, indicating heightened investor anxiety about regulatory risks. The company's next earnings report, scheduled for later this month, will be closely watched for updates on regulatory issues and delivery numbers. Insider activity has been neutral, but any significant buying or selling by executives could further impact sentiment."
-
-Example Natural Transition:
-"{lead_host_info['name']}: That's a great point about the AI sector momentum. Meanwhile, over in the financial space, we're seeing some interesting developments that are worth discussing.
-
-{supporting_host_info['name']}: Absolutely! The banking sector has been showing some real resilience lately, and today's moves suggest investors are positioning themselves ahead of the Fed meeting next week."
-
-IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON object.
-"""
+You are writing a professional financial news script for \"Market Voices,\" a daily analysis show covering major US stocks including NASDAQ-100 and S&P 500 companies. Create a comprehensive, engaging script that explains market movements with specific details and analysis.\n\nHOSTS:\n- {lead_host_info['name']} ({lead_host_info['age']}): {lead_host_info['personality']}\n- {supporting_host_info['name']} ({supporting_host_info['age']}): {supporting_host_info['personality']}\n\nTODAY'S MARKET DATA:\n{enhanced_summary}\n\nTOP 5 WINNERS (with detailed analysis):\n{winners_text}\n\nTOP 5 LOSERS (with detailed analysis):\n{losers_text}\n\nSCRIPT GENERATION REQUIREMENTS (EDITABLE):\n{requirements_md}\n\nIMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON object.\n"""
         # Calculate coverage for S&P 500 and NASDAQ-100
         sp500_expected = len(symbol_loader.get_sp_500_symbols())
         nasdaq100_expected = len(symbol_loader.get_nasdaq_100_symbols())
@@ -392,10 +444,10 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
 
     def _generate_mock_script(self, market_data: Dict) -> Dict:
         # Generate a mock script for test mode
-        lead_host = host_manager.get_lead_host_for_date()
-        lead_host_info = host_manager.get_host_info(lead_host)
+        lead_host = self.get_lead_host_for_date()
+        lead_host_info = self.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
-        supporting_host_info = host_manager.get_host_info(supporting_host)
+        supporting_host_info = self.get_host_info(supporting_host)
         
         # Defensive assignment for market_date to avoid f-string parsing issues
         if 'market_summary' in market_data and 'market_date' in market_data['market_summary']:
@@ -428,7 +480,7 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
                 }
             ],
             "outro": f"{lead_host_info['name']}: That wraps up today's market analysis! Don't forget to subscribe for daily insights, and I'll see you tomorrow for more market action. This is {lead_host_info['name']}, signing off!",
-            "estimated_runtime_minutes": host_manager.get_target_runtime(),
+            "estimated_runtime_minutes": self.get_target_runtime(),
             "speaking_time_balance": {
                 "marcus_percentage": 50,
                 "suzanne_percentage": 50
@@ -442,9 +494,9 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
         logger.info("Mock script generated successfully for test mode")
         return mock_script
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:
-        lead_host_info = host_manager.get_host_info(lead_host)
+        lead_host_info = self.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
-        supporting_host_info = host_manager.get_host_info(supporting_host)
+        supporting_host_info = self.get_host_info(supporting_host)
         
         # Define segment topics
         segment_topics = [
@@ -497,7 +549,7 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             "intro": intro,
             "segments": segments,
             "outro": outro,
-            "estimated_runtime_minutes": host_manager.get_target_runtime(),
+            "estimated_runtime_minutes": self.get_target_runtime(),
             "speaking_time_balance": {
                 "marcus_percentage": marcus_percentage,
                 "suzanne_percentage": suzanne_percentage
@@ -511,13 +563,13 @@ IMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON o
             script_data['segments'] = []
         
         if 'intro' not in script_data:
-            script_data['intro'] = host_manager.get_intro_template(lead_host)
+            script_data['intro'] = self.get_intro_template(lead_host)
         
         if 'outro' not in script_data:
-            script_data['outro'] = host_manager.get_outro_template(lead_host)
+            script_data['outro'] = self.get_outro_template(lead_host)
         
         # Validate speaking time balance
-        if not host_manager.validate_speaking_time_balance(script_data['segments']):
+        if not self.validate_speaking_time_balance(script_data['segments']):
             logger.warning("Speaking time balance validation failed")
         
         # Ensure minimum segment count
