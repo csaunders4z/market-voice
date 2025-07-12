@@ -396,31 +396,25 @@ MARKET OVERVIEW:
 {free_news_text}
 """
         
-        # Load requirements from external markdown file
-        requirements_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../planning/script_generation_requirements.md'))
+        # Foundational Prompt Approach:
+        # Load the foundational script generation prompt from planning/script_generation_requirements.md.
+        # This file defines the style, tone, and overall rules for script generation.
+        # At runtime, we amend this foundational prompt with current market data, news, and analysis.
+        foundational_prompt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../planning/script_generation_requirements.md'))
         try:
-            with open(requirements_path, 'r', encoding='utf-8') as req_file:
-                requirements_md = req_file.read()
-                logger.info(f"Loaded requirements from {requirements_path}")
+            with open(foundational_prompt_path, 'r', encoding='utf-8') as prompt_file:
+                base_prompt = prompt_file.read()
+                logger.info(f"Loaded foundational prompt from {foundational_prompt_path}")
         except Exception as e:
-            logger.warning(f"Could not load requirements from {requirements_path}: {e}. Falling back to built-in requirements.")
-            # Fallback: Use the previously hardcoded requirements
-            requirements_md = (
-                "CRITICAL REQUIREMENTS - READ CAREFULLY:\n"
-                "1. ABSOLUTE MINIMUM 1440 WORDS TOTAL - This is non-negotiable\n"
-                "2. You MUST write EXACTLY 10 stock segments (5 winners + 5 losers)\n"
-                "3. Each stock segment MUST be 100-120 words minimum\n"
-                "4. Total stock segments must be 1000-1200 words\n"
-                "5. Intro: 200 words, Market Overview: 150 words, Market Sentiment: 100 words, Outro: 150 words\n"
-                "6. Speaking time: 45-55% split between hosts\n"
-                "7. Use varied language - avoid repetitive phrases like 'we will', 'let's look at', etc.\n"
-                "8. Include specific data points, percentages, and technical indicators\n"
-                "9. Reference actual news events and analyst actions\n"
-                "10. Professional financial news tone\n"
-                "(See documentation for full requirements.)"
+            logger.warning(f"Could not load foundational prompt from {foundational_prompt_path}: {e}. Using fallback prompt.")
+            base_prompt = (
+                "You are writing a professional financial news script for Market Voices. "
+                "The script must include both hosts, top 5 gainers and losers, and be natural, engaging, and data-driven. "
+                "Alternate hosts, use provided data only, and maintain a professional tone."
             )
-        prompt = f"""
-You are writing a professional financial news script for \"Market Voices,\" a daily analysis show covering major US stocks including NASDAQ-100 and S&P 500 companies. Create a comprehensive, engaging script that explains market movements with specific details and analysis.\n\nHOSTS:\n- {lead_host_info['name']} ({lead_host_info['age']}): {lead_host_info['personality']}\n- {supporting_host_info['name']} ({supporting_host_info['age']}): {supporting_host_info['personality']}\n\nTODAY'S MARKET DATA:\n{enhanced_summary}\n\nTOP 5 WINNERS (with detailed analysis):\n{winners_text}\n\nTOP 5 LOSERS (with detailed analysis):\n{losers_text}\n\nSCRIPT GENERATION REQUIREMENTS (EDITABLE):\n{requirements_md}\n\nIMPORTANT: Return ONLY valid JSON. No additional text before or after the JSON object.\n"""
+        # Amend the foundational prompt with daily market data and analysis
+        # (This logic can be further refined as needed)
+        prompt = f"""{base_prompt}\n\n---\n\nTODAY'S MARKET DATA:\n{enhanced_summary}\n\nTOP 5 WINNERS:\n{winners_text}\n\nTOP 5 LOSERS:\n{losers_text}\n\n(Use all provided data and follow the foundational prompt above. Do not invent information. Write a natural, flowing script alternating hosts as described.)\n"""
         # Calculate coverage for S&P 500 and NASDAQ-100
         sp500_expected = len(symbol_loader.get_sp_500_symbols())
         nasdaq100_expected = len(symbol_loader.get_nasdaq_100_symbols())
