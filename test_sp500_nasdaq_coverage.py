@@ -107,7 +107,86 @@ def test_comprehensive_collector_coverage():
     print("✅ Comprehensive collector coverage test PASSED")
     return True
 
-def test_script_generator_references():
+def test_script_generator_requirements():
+    """Test that script generator output meets foundational requirements from requirements doc"""
+    print("\n" + "=" * 60)
+    print("TESTING SCRIPT GENERATION REQUIREMENTS")
+    print("=" * 60)
+
+    # Create sample market data with both indices
+    sample_market_data = {
+        'market_summary': {
+            'total_target_symbols': 516,
+            'sp500_coverage': 250,
+            'nasdaq100_coverage': 100,
+            'coverage_percentage': 67.8,
+            'advancing_stocks': 65,
+            'declining_stocks': 35,
+            'average_change': 0.85,
+            'market_sentiment': 'Mixed',
+            'data_source': 'Comprehensive Collection',
+            'market_date': datetime.now().isoformat()
+        },
+        'winners': [
+            {'symbol': 'AAPL', 'company_name': 'Apple Inc.', 'current_price': 150.25, 'percent_change': 3.2},
+            {'symbol': 'MSFT', 'company_name': 'Microsoft Corporation', 'current_price': 320.50, 'percent_change': 2.8},
+            {'symbol': 'GOOGL', 'company_name': 'Alphabet Inc.', 'current_price': 2800.00, 'percent_change': 2.1},
+            {'symbol': 'AMZN', 'company_name': 'Amazon.com Inc.', 'current_price': 3200.75, 'percent_change': 1.9},
+            {'symbol': 'NVDA', 'company_name': 'NVIDIA Corporation', 'current_price': 450.30, 'percent_change': 1.7}
+        ],
+        'losers': [
+            {'symbol': 'TSLA', 'company_name': 'Tesla Inc.', 'current_price': 800.50, 'percent_change': -2.1},
+            {'symbol': 'META', 'company_name': 'Meta Platforms Inc.', 'current_price': 280.25, 'percent_change': -1.8},
+            {'symbol': 'NFLX', 'company_name': 'Netflix Inc.', 'current_price': 450.75, 'percent_change': -1.5},
+            {'symbol': 'ADBE', 'company_name': 'Adobe Inc.', 'current_price': 380.00, 'percent_change': -1.2},
+            {'symbol': 'CRM', 'company_name': 'Salesforce Inc.', 'current_price': 220.50, 'percent_change': -0.9}
+        ],
+        'collection_success': True
+    }
+
+    lead_host = 'suzanne'
+    script_data = script_generator._generate_mock_script(sample_market_data)
+    script_text = script_generator.format_script_for_output(script_data)
+
+    # Check for both hosts
+    has_suzanne = 'Suzanne' in script_text
+    has_marcus = 'Marcus' in script_text
+    print(f"Script contains Suzanne: {has_suzanne}")
+    print(f"Script contains Marcus: {has_marcus}")
+    assert has_suzanne, "Script should mention Suzanne"
+    assert has_marcus, "Script should mention Marcus"
+
+    # Check for 10 stock segments (5 winners, 5 losers)
+    winner_count = sum(1 for w in sample_market_data['winners'] if w['symbol'] in script_text)
+    loser_count = sum(1 for l in sample_market_data['losers'] if l['symbol'] in script_text)
+    print(f"Winner segments found: {winner_count}")
+    print(f"Loser segments found: {loser_count}")
+    assert winner_count == 5, "Script should cover all 5 winners"
+    assert loser_count == 5, "Script should cover all 5 losers"
+
+    # Check intro and outro
+    intro_phrases = ["welcome to", "today's show", "good evening", "hey everyone"]
+    outro_phrases = ["thank you", "subscribe", "signing off", "see you tomorrow"]
+    has_intro = any(p in script_text.lower() for p in intro_phrases)
+    has_outro = any(p in script_text.lower() for p in outro_phrases)
+    print(f"Script contains intro: {has_intro}")
+    print(f"Script contains outro: {has_outro}")
+    assert has_intro, "Script should have an intro with welcome message"
+    assert has_outro, "Script should have an outro with thank you and sign-off"
+
+    # Check anti-repetition: no phrase >3 words appears more than twice
+    import re
+    words = script_text.split()
+    ngrams = [" ".join(words[i:i+4]) for i in range(len(words)-3)]
+    ngram_counts = {}
+    for ng in ngrams:
+        ngram_counts[ng] = ngram_counts.get(ng,0)+1
+    repeats = [ng for ng, count in ngram_counts.items() if count > 2]
+    print(f"Repeated 4-word phrases: {repeats}")
+    assert not repeats, "No 4-word phrase should appear more than twice"
+
+    print("✅ Script generator requirements test PASSED")
+
     """Test that script generator properly references both indices"""
     print("\n" + "=" * 60)
     print("TESTING SCRIPT GENERATOR REFERENCES")

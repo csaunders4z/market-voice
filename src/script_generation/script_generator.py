@@ -9,6 +9,7 @@ import json
 import re
 from loguru import logger
 import os
+import random
 
 from ..config.settings import get_settings
 from ..content_validation.quality_controls import quality_controller
@@ -442,38 +443,154 @@ MARKET OVERVIEW:
         lead_host_info = self.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
         supporting_host_info = self.get_host_info(supporting_host)
-        
+
         # Defensive assignment for market_date to avoid f-string parsing issues
         if 'market_summary' in market_data and 'market_date' in market_data['market_summary']:
             mock_market_date = market_data['market_summary']['market_date']
         else:
             mock_market_date = datetime.now().isoformat()
 
+        # Intro
+        intro = (
+            f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. "
+            f"{supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n"
+            f"{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. "
+            f"We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n"
+            f"{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n"
+            f"{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
+        )
+
+        segments = []
+        host_toggle = [lead_host, supporting_host]
+        host_idx = 0
+
+        # Market overview segment
+        market_summary = market_data.get('market_summary', {})
+        overview_text = (
+            f"Today was an interesting session across the major US indices. "
+            f"We saw {market_summary.get('advancing_stocks', 0)} stocks advance and {market_summary.get('declining_stocks', 0)} decline, "
+            f"with an average change of {market_summary.get('average_change', 0):.2f}%. "
+            f"This suggests a mixed but generally positive day for major US stocks."
+        )
+        segments.append({
+            "host": host_toggle[host_idx % 2],
+            "text": overview_text,
+            "topic": "Market Overview"
+        })
+        host_idx += 1
+
+        # Winner segment templates and fragments
+        winner_templates = [
+            "{symbol} ({company}) posted a strong close at ${price:.2f}, rising {change:.2f}%. {fragment}",
+            "Shares of {company} ({symbol}) surged {change:.2f}% to finish at ${price:.2f}. {fragment}",
+            "{company} ({symbol}) was among the session's top gainers, ending at ${price:.2f}—a {change:.2f}% jump. {fragment}",
+            "{symbol} stood out with a {change:.2f}% rally, closing at ${price:.2f}. {fragment}",
+            "{company} ({symbol}) impressed the market, gaining {change:.2f}% to ${price:.2f}. {fragment}",
+            "The stock of {company} ({symbol}) advanced to ${price:.2f}, up {change:.2f}%. {fragment}"
+        ]
+        winner_fragments = [
+            "Investors responded positively to upbeat guidance.",
+            "Momentum was fueled by analyst upgrades.",
+            "Heavy trading volume signaled strong interest.",
+            "The move puts {symbol} among the week's top performers.",
+            "This follows a string of positive sessions for {symbol}.",
+            "Market sentiment in the {sector} sector was especially bullish."
+        ]
+        winner_synonyms = ["surged", "jumped", "rallied", "climbed", "leapt", "advanced"]
+
+        for i, winner in enumerate(market_data.get('winners', [])[:5]):
+            t = random.choice(winner_templates)
+            fragment = random.choice(winner_fragments)
+            synonym = random.choice(winner_synonyms)
+            # Try to use sector if present
+            sector = winner.get('sector', None)
+            fragment = fragment.replace('{sector}', sector if sector else 'market')
+            # Add rank context if possible
+            rank_phrase = f"This was the #{i+1} gainer in the index." if i < 3 else ""
+            winner_text = t.format(
+                symbol=winner['symbol'],
+                company=winner['company_name'],
+                price=winner['current_price'],
+                change=winner['percent_change'],
+                fragment=fragment
+            )
+            # Insert synonym
+            winner_text = winner_text.replace('surged', synonym)
+            # Add rank phrase if not empty
+            if rank_phrase:
+                winner_text += f" {rank_phrase}"
+            segments.append({
+                "host": host_toggle[host_idx % 2],
+                "text": winner_text,
+                "topic": f"Winner {i+1}: {winner['symbol']}"
+            })
+            host_idx += 1
+
+        # Loser segment templates and fragments
+        loser_templates = [
+            "{symbol} ({company}) slipped {abs_change:.2f}% to ${price:.2f}. {fragment}",
+            "Shares of {company} ({symbol}) ended the day at ${price:.2f}, down {abs_change:.2f}%. {fragment}",
+            "{company} ({symbol}) was among notable decliners, closing at ${price:.2f} for a {abs_change:.2f}% drop. {fragment}",
+            "{symbol} tumbled {abs_change:.2f}% to ${price:.2f}. {fragment}",
+            "{company} ({symbol}) faced selling pressure, falling {abs_change:.2f}% to ${price:.2f}. {fragment}",
+            "The stock of {company} ({symbol}) retreated to ${price:.2f}, off {abs_change:.2f}%. {fragment}"
+        ]
+        loser_fragments = [
+            "Profit-taking may have played a role.",
+            "Sector rotation impacted the {sector} sector.",
+            "Broader market volatility weighed on the stock.",
+            "The decline follows a recent rally in {symbol}.",
+            "Analysts cited cautious guidance as a factor.",
+            "Trading volume was above average for the session."
+        ]
+        loser_synonyms = ["slipped", "dropped", "fell", "declined", "tumbled", "retreated"]
+
+        for i, loser in enumerate(market_data.get('losers', [])[:5]):
+            t = random.choice(loser_templates)
+            fragment = random.choice(loser_fragments)
+            synonym = random.choice(loser_synonyms)
+            sector = loser.get('sector', None)
+            fragment = fragment.replace('{sector}', sector if sector else 'market')
+            rank_phrase = f"This was the #{i+1} loser in the index." if i < 3 else ""
+            loser_text = t.format(
+                symbol=loser['symbol'],
+                company=loser['company_name'],
+                price=loser['current_price'],
+                abs_change=abs(loser['percent_change']),
+                fragment=fragment
+            )
+            loser_text = loser_text.replace('slipped', synonym)
+            if rank_phrase:
+                loser_text += f" {rank_phrase}"
+            segments.append({
+                "host": host_toggle[host_idx % 2],
+                "text": loser_text,
+                "topic": f"Loser {i+1}: {loser['symbol']}"
+            })
+            host_idx += 1
+
+        # Market sentiment segment
+        sentiment_text = (
+            "The market is showing resilience despite some volatility. Volume was healthy, and institutional buying patterns "
+            "suggest continued confidence in the major US stocks' long-term prospects."
+        )
+        segments.append({
+            "host": host_toggle[host_idx % 2],
+            "text": sentiment_text,
+            "topic": "Market Sentiment"
+        })
+        host_idx += 1
+
+        # Outro
+        outro = (
+            f"{lead_host_info['name']}: That wraps up today's market analysis! Don't forget to subscribe for daily insights, "
+            f"and I'll see you tomorrow for more market action. This is {lead_host_info['name']}, signing off!"
+        )
+
         mock_script = {
-            "intro": f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today.",
-            "segments": [
-                {
-                    "host": lead_host,
-                    "text": f"Today was an interesting session across the major US indices. We saw {market_data.get('market_summary', {}).get('advancing_stocks', 0)} stocks advance and {market_data.get('market_summary', {}).get('declining_stocks', 0)} decline, with an average change of {market_data.get('market_summary', {}).get('average_change', 0):.2f}%. This suggests a mixed but generally positive day for major US stocks.",
-                    "topic": "Market Overview"
-                },
-                {
-                    "host": supporting_host,
-                    "text": "Looking at the top performers, we had some impressive moves. Apple led the charge with a solid gain, followed by Microsoft and Google. These moves were driven by strong earnings expectations and positive analyst sentiment.",
-                    "topic": "Top Performers Analysis"
-                },
-                {
-                    "host": lead_host,
-                    "text": "On the downside, we saw some pressure on Tesla and Meta. These moves appear to be profit-taking after recent strong performance, rather than fundamental concerns about the companies.",
-                    "topic": "Decliners Analysis"
-                },
-                {
-                    "host": supporting_host,
-                    "text": "The market is showing resilience despite some volatility. Volume was healthy, and institutional buying patterns suggest continued confidence in the major US stocks' long-term prospects.",
-                    "topic": "Market Sentiment"
-                }
-            ],
-            "outro": f"{lead_host_info['name']}: That wraps up today's market analysis! Don't forget to subscribe for daily insights, and I'll see you tomorrow for more market action. This is {lead_host_info['name']}, signing off!",
+            "intro": intro,
+            "segments": segments,
+            "outro": outro,
             "estimated_runtime_minutes": self.get_target_runtime(),
             "speaking_time_balance": {
                 "marcus_percentage": 50,
@@ -484,8 +601,10 @@ MARKET OVERVIEW:
             "market_date": mock_market_date,
             "generation_timestamp": datetime.now().isoformat()
         }
-        
+
         logger.info("Mock script generated successfully for test mode")
+        return mock_script
+    
         return mock_script
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:
         lead_host_info = self.get_host_info(lead_host)
@@ -500,19 +619,62 @@ MARKET OVERVIEW:
             "Market Sentiment & Outlook"
         ]
         
-        # Split the text into paragraphs and create segments
-        paragraphs = [p.strip() for p in script_text.split('\n\n') if p.strip()]
-        
-        segments = []
-        current_host = lead_host
-        
-        # Create intro with natural banter
-        intro = f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
+        # Check anti-repetition: no phrase >3 words appears more than twice
+        import re
+        words = script_text.split()
+        ngrams = [" ".join(words[i:i+4]) for i in range(len(words)-3)]
+        ngram_counts = {}
+        for ng in ngrams:
+            ngram_counts[ng] = ngram_counts.get(ng,0)+1
+        repeats = [ng for ng, count in ngram_counts.items() if count > 2]
+        print(f"Repeated 4-word phrases: {repeats}")
+
+        if repeats:
+            print("[Prototype] Would call OpenAI to rewrite problematic sentences/segments.")
+            self.rewrite_problematic_sentences_with_openai(script_text, repeats, paragraphs)
+
+    def rewrite_problematic_sentences_with_openai(self, script_text, repeated_phrases, paragraphs):
+        """
+        For each problematic sentence/segment, call OpenAI to rewrite it to avoid the repeated phrases.
+        Replace the sentence in the script with the OpenAI response. Log errors and fall back to the original if needed.
+        """
+        import re
+        for phrase in repeated_phrases:
+            # Find all paragraphs containing the repeated phrase
+            hits = [p for p in paragraphs if phrase in p]
+            for hit in hits:
+                prompt = (
+                    f"Rewrite the following sentence or segment to avoid the phrase: '{phrase}'.\n"
+                    f"Other phrases to avoid: {repeated_phrases}.\n"
+                    f"Context: {hit}\n"
+                    f"Instructions: Keep the meaning and style appropriate for a professional financial news broadcast."
+                )
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": "You are a financial news script editor."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=256,
+                        temperature=0.7
+                    )
+                    new_text = response.choices[0].message.content.strip()
+                    print(f"[OpenAI] Rewriting segment.\nOld: {hit}\nNew: {new_text}")
+                    # Replace the old segment in script_text (or paragraphs) with the new one
+                    idx = paragraphs.index(hit)
+                    paragraphs[idx] = new_text
+                except Exception as e:
+                    print(f"[OpenAI ERROR] Failed to rewrite segment: {e}. Keeping original.")
+
+        assert not repeats, "No 4-word phrase should appear more than twice"
+ross the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
         
         # Create segments with alternating hosts
         for i, (paragraph, topic) in enumerate(zip(paragraphs[:4], segment_topics)):
             segments.append({
                 "host": current_host,
+{{ ... }}
                 "text": paragraph,
                 "topic": topic
             })
@@ -711,6 +873,32 @@ Please fix these issues and return an improved version of the script in the same
         count = sum(all_text.count(indicator) for indicator in indicators)
         return count
 
+    def _count_news_sources(self, script_data: Dict) -> int:
+        """Count unique news sources referenced in the script."""
+        sources = set()
+        # Check for a top-level 'news_sources' field
+        news_sources = script_data.get('news_sources', [])
+        if isinstance(news_sources, list):
+            for entry in news_sources:
+                if isinstance(entry, str):
+                    sources.add(entry.strip())
+                elif isinstance(entry, dict) and 'source' in entry:
+                    sources.add(str(entry['source']).strip())
+        # Scan winner and loser segments for 'source' keys
+        for segment in script_data.get('winner_segments', []):
+            if isinstance(segment, dict) and 'source' in segment:
+                sources.add(str(segment['source']).strip())
+        for segment in script_data.get('loser_segments', []):
+            if isinstance(segment, dict) and 'source' in segment:
+                sources.add(str(segment['source']).strip())
+        # Optionally scan a top-level 'news' field if present
+        for news_item in script_data.get('news', []):
+            if isinstance(news_item, dict) and 'source' in news_item:
+                sources.add(str(news_item['source']).strip())
+            elif isinstance(news_item, str):
+                sources.add(news_item.strip())
+        return len([s for s in sources if s])
+
     def _extract_all_text(self, script_data: Dict) -> str:
         """Extract all text content from script"""
         text_parts = []
@@ -846,37 +1034,16 @@ Please fix these issues and return an improved version of the script in the same
         output.append(script_data.get('intro', ''))
         output.append("")
         
-        # Market Overview
-        if market_overview:
-            output.append("MARKET OVERVIEW:")
-            output.append(market_overview)
-            output.append("")
-        
-        # Winner Segments
-        if winner_segments:
-            output.append("TOP 5 WINNERS:")
-            for i, segment in enumerate(winner_segments, 1):
-                output.append(f"Winner {i} - {segment.get('host', 'Unknown').title()}:")
-                output.append(f"Stock: {segment.get('stock', 'Unknown')}")
-                output.append(f"Words: {len(segment.get('text', '').split())}")
+        # All Segments (market overview, winners, losers, sentiment)
+        segments = script_data.get('segments', [])
+        if segments:
+            output.append("SEGMENTS:")
+            for i, segment in enumerate(segments, 1):
+                host = segment.get('host', 'Unknown').title()
+                topic = segment.get('topic', 'Unknown')
+                output.append(f"Segment {i} ({topic}) by {host}:")
                 output.append(segment.get('text', ''))
                 output.append("")
-        
-        # Loser Segments
-        if loser_segments:
-            output.append("TOP 5 LOSERS:")
-            for i, segment in enumerate(loser_segments, 1):
-                output.append(f"Loser {i} - {segment.get('host', 'Unknown').title()}:")
-                output.append(f"Stock: {segment.get('stock', 'Unknown')}")
-                output.append(f"Words: {len(segment.get('text', '').split())}")
-                output.append(segment.get('text', ''))
-                output.append("")
-        
-        # Market Sentiment
-        if market_sentiment:
-            output.append("MARKET SENTIMENT:")
-            output.append(market_sentiment)
-            output.append("")
         
         # Outro
         output.append("OUTRO:")

@@ -24,11 +24,12 @@ class UnifiedDataCollector:
     def __init__(self):
         self.settings = get_settings()
         from .finnhub_data_collector import finnhub_data_collector
+        # Data source priority: Finnhub (batch, cost-effective), then FMP, Yahoo Finance, Alpha Vantage
         self.sources = [
+            ("Finnhub", self._collect_finnhub_data),
             ("FMP", self._collect_fmp_data),
             ("Yahoo Finance", self._collect_yf_data),
-            ("Alpha Vantage", self._collect_av_data),
-            ("Finnhub", self._collect_finnhub_data)
+            ("Alpha Vantage", self._collect_av_data)
         ]
         self._finnhub_consecutive_failures = 0
         self._finnhub_failure_threshold = 5  # configurable
@@ -634,8 +635,57 @@ class UnifiedDataCollector:
         if self._finnhub_disabled_for_session:
             logger.error(f"Finnhub API disabled for this session after {self._finnhub_failure_threshold} consecutive failures. Skipping all Finnhub requests.")
             return False, [], "Finnhub - Disabled"
-            logger.error(f"Finnhub collection failed: {str(e)}")
-            return False, [], f"Finnhub - {str(e)}"
+
+        # Import FinnhubDataCollector instance
+        try:
+            from .finnhub_data_collector import finnhub_data_collector
+        except Exception as e:
+            logger.error(f"Could not import finnhub_data_collector: {str(e)}")
+            return False, [], f"Finnhub - Import error: {str(e)}"
+
+        results = []
+        errors = []
+        for symbol in symbols:
+            try:
+                quote = finnhub_data_collector.get_quote(symbol)
+                profile = finnhub_data_collector.get_company_profile(symbol)
+                news = finnhub_data_collector.get_news(symbol)
+                if quote is None or profile is None:
+                    logger.warning(f"Missing data for {symbol} from Finnhub.")
+                    errors.append(symbol)
+                    continue
+                stock_data = {**quote, **profile}
+                stock_data['news_articles'] = news if news else []
+                # Calculate percent change if possible
+                try:
+                    if stock_data.get('current_price') is not None and stock_data.get('previous_close') not in (None, 0):
+                        stock_data['percent_change'] = ((stock_data['current_price'] - stock_data['previous_close']) / stock_data['previous_close']) * 100
+                    else:
+                        stock_data['percent_change'] = 0.0
+                except Exception as e:
+                    stock_data['percent_change'] = 0.0
+                results.append(stock_data)
+            except Exception as e:
+                logger.error(f"Finnhub collection failed for {symbol}: {str(e)}")
+                errors.append(symbol)
+                continue
+
+        if not results:
+            if errors:
+                logger.error(f"Finnhub collection failed for all symbols: {errors}")
+                self._finnhub_consecutive_failures += 1
+                if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                    self._finnhub_disabled_for_session = True
+                    logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures.")
+                return False, [], f"Finnhub - All symbols failed: {errors}"
+            else:
+                logger.warning("Finnhub returned no data.")
+                return False, [], "Finnhub - No data"
+
+        # Reset failure counter on success
+        self._finnhub_consecutive_failures = 0
+        return True, results, "Finnhub"
+
 
 # Global instance
 unified_collector = UnifiedDataCollector() 

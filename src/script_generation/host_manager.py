@@ -1,7 +1,13 @@
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from loguru import logger
+from ..config.settings import get_settings
 
+import pytz
 
-        
-        
+class HostManager:
+    def __init__(self):
+        self.est_tz = pytz.timezone('US/Eastern')
         # Host personalities and characteristics
         self.hosts = {
             'marcus': {
@@ -185,4 +191,5 @@
 
 
 # Global instance
-host_manager = HostManager() 
+host_manager = HostManager()
+ 
