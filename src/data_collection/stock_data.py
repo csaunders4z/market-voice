@@ -128,8 +128,8 @@ class StockDataCollector:
         logger.info("Starting enhanced data collection with unified collector")
         
         try:
-            # Determine if we're in production mode
-            production_mode = os.getenv("TEST_MODE") != "1"
+            # Always use production mode
+            production_mode = True
             
             # Use unified collector with fallback logic
             market_data = unified_collector.collect_data(production_mode=production_mode)
@@ -196,4 +196,4 @@ class StockDataCollector:
 
 
 # Global instance
-stock_collector = StockDataCollector() 
+stock_collector = StockDataCollector()  

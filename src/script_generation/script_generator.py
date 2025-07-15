@@ -428,184 +428,9 @@ MARKET OVERVIEW:
             nasdaq100_coverage = market_summary.get('nasdaq100_analyzed', 0) or 0
         # Error handling for insufficient coverage
         if sp500_coverage < sp500_expected or nasdaq100_coverage < nasdaq100_expected:
-            return {
-                'generation_success': False,
-                'error': f'Insufficient index coverage for script generation. S&P 500: {sp500_coverage}/{sp500_expected}, NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected}',
-                'market_date': datetime.now().isoformat(),
-                'lead_host': 'unknown',
-                'estimated_runtime_minutes': 0
-            }
+            logger.warning(f'Insufficient index coverage for script generation. S&P 500: {sp500_coverage}/{sp500_expected}, NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected}')
         return prompt
 
-    def _generate_mock_script(self, market_data: Dict) -> Dict:
-        # Generate a mock script for test mode
-        lead_host = self.get_lead_host_for_date()
-        lead_host_info = self.get_host_info(lead_host)
-        supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
-        supporting_host_info = self.get_host_info(supporting_host)
-
-        # Defensive assignment for market_date to avoid f-string parsing issues
-        if 'market_summary' in market_data and 'market_date' in market_data['market_summary']:
-            mock_market_date = market_data['market_summary']['market_date']
-        else:
-            mock_market_date = datetime.now().isoformat()
-
-        # Intro
-        intro = (
-            f"{lead_host_info['name']}: Hey everyone, welcome to Market Voices! What a day we've had across the major US markets. "
-            f"{supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n"
-            f"{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. "
-            f"We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n"
-            f"{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n"
-            f"{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
-        )
-
-        segments = []
-        host_toggle = [lead_host, supporting_host]
-        host_idx = 0
-
-        # Market overview segment
-        market_summary = market_data.get('market_summary', {})
-        overview_text = (
-            f"Today was an interesting session across the major US indices. "
-            f"We saw {market_summary.get('advancing_stocks', 0)} stocks advance and {market_summary.get('declining_stocks', 0)} decline, "
-            f"with an average change of {market_summary.get('average_change', 0):.2f}%. "
-            f"This suggests a mixed but generally positive day for major US stocks."
-        )
-        segments.append({
-            "host": host_toggle[host_idx % 2],
-            "text": overview_text,
-            "topic": "Market Overview"
-        })
-        host_idx += 1
-
-        # Winner segment templates and fragments
-        winner_templates = [
-            "{symbol} ({company}) posted a strong close at ${price:.2f}, rising {change:.2f}%. {fragment}",
-            "Shares of {company} ({symbol}) surged {change:.2f}% to finish at ${price:.2f}. {fragment}",
-            "{company} ({symbol}) was among the session's top gainers, ending at ${price:.2f}—a {change:.2f}% jump. {fragment}",
-            "{symbol} stood out with a {change:.2f}% rally, closing at ${price:.2f}. {fragment}",
-            "{company} ({symbol}) impressed the market, gaining {change:.2f}% to ${price:.2f}. {fragment}",
-            "The stock of {company} ({symbol}) advanced to ${price:.2f}, up {change:.2f}%. {fragment}"
-        ]
-        winner_fragments = [
-            "Investors responded positively to upbeat guidance.",
-            "Momentum was fueled by analyst upgrades.",
-            "Heavy trading volume signaled strong interest.",
-            "The move puts {symbol} among the week's top performers.",
-            "This follows a string of positive sessions for {symbol}.",
-            "Market sentiment in the {sector} sector was especially bullish."
-        ]
-        winner_synonyms = ["surged", "jumped", "rallied", "climbed", "leapt", "advanced"]
-
-        for i, winner in enumerate(market_data.get('winners', [])[:5]):
-            t = random.choice(winner_templates)
-            fragment = random.choice(winner_fragments)
-            synonym = random.choice(winner_synonyms)
-            # Try to use sector if present
-            sector = winner.get('sector', None)
-            fragment = fragment.replace('{sector}', sector if sector else 'market')
-            # Add rank context if possible
-            rank_phrase = f"This was the #{i+1} gainer in the index." if i < 3 else ""
-            winner_text = t.format(
-                symbol=winner['symbol'],
-                company=winner['company_name'],
-                price=winner['current_price'],
-                change=winner['percent_change'],
-                fragment=fragment
-            )
-            # Insert synonym
-            winner_text = winner_text.replace('surged', synonym)
-            # Add rank phrase if not empty
-            if rank_phrase:
-                winner_text += f" {rank_phrase}"
-            segments.append({
-                "host": host_toggle[host_idx % 2],
-                "text": winner_text,
-                "topic": f"Winner {i+1}: {winner['symbol']}"
-            })
-            host_idx += 1
-
-        # Loser segment templates and fragments
-        loser_templates = [
-            "{symbol} ({company}) slipped {abs_change:.2f}% to ${price:.2f}. {fragment}",
-            "Shares of {company} ({symbol}) ended the day at ${price:.2f}, down {abs_change:.2f}%. {fragment}",
-            "{company} ({symbol}) was among notable decliners, closing at ${price:.2f} for a {abs_change:.2f}% drop. {fragment}",
-            "{symbol} tumbled {abs_change:.2f}% to ${price:.2f}. {fragment}",
-            "{company} ({symbol}) faced selling pressure, falling {abs_change:.2f}% to ${price:.2f}. {fragment}",
-            "The stock of {company} ({symbol}) retreated to ${price:.2f}, off {abs_change:.2f}%. {fragment}"
-        ]
-        loser_fragments = [
-            "Profit-taking may have played a role.",
-            "Sector rotation impacted the {sector} sector.",
-            "Broader market volatility weighed on the stock.",
-            "The decline follows a recent rally in {symbol}.",
-            "Analysts cited cautious guidance as a factor.",
-            "Trading volume was above average for the session."
-        ]
-        loser_synonyms = ["slipped", "dropped", "fell", "declined", "tumbled", "retreated"]
-
-        for i, loser in enumerate(market_data.get('losers', [])[:5]):
-            t = random.choice(loser_templates)
-            fragment = random.choice(loser_fragments)
-            synonym = random.choice(loser_synonyms)
-            sector = loser.get('sector', None)
-            fragment = fragment.replace('{sector}', sector if sector else 'market')
-            rank_phrase = f"This was the #{i+1} loser in the index." if i < 3 else ""
-            loser_text = t.format(
-                symbol=loser['symbol'],
-                company=loser['company_name'],
-                price=loser['current_price'],
-                abs_change=abs(loser['percent_change']),
-                fragment=fragment
-            )
-            loser_text = loser_text.replace('slipped', synonym)
-            if rank_phrase:
-                loser_text += f" {rank_phrase}"
-            segments.append({
-                "host": host_toggle[host_idx % 2],
-                "text": loser_text,
-                "topic": f"Loser {i+1}: {loser['symbol']}"
-            })
-            host_idx += 1
-
-        # Market sentiment segment
-        sentiment_text = (
-            "The market is showing resilience despite some volatility. Volume was healthy, and institutional buying patterns "
-            "suggest continued confidence in the major US stocks' long-term prospects."
-        )
-        segments.append({
-            "host": host_toggle[host_idx % 2],
-            "text": sentiment_text,
-            "topic": "Market Sentiment"
-        })
-        host_idx += 1
-
-        # Outro
-        outro = (
-            f"{lead_host_info['name']}: That wraps up today's market analysis! Don't forget to subscribe for daily insights, "
-            f"and I'll see you tomorrow for more market action. This is {lead_host_info['name']}, signing off!"
-        )
-
-        mock_script = {
-            "intro": intro,
-            "segments": segments,
-            "outro": outro,
-            "estimated_runtime_minutes": self.get_target_runtime(),
-            "speaking_time_balance": {
-                "marcus_percentage": 50,
-                "suzanne_percentage": 50
-            },
-            "generation_success": True,
-            "lead_host": lead_host,
-            "market_date": mock_market_date,
-            "generation_timestamp": datetime.now().isoformat()
-        }
-
-        logger.info("Mock script generated successfully for test mode")
-        return mock_script
-    
-        return mock_script
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:
         lead_host_info = self.get_host_info(lead_host)
         supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
@@ -618,6 +443,8 @@ MARKET OVERVIEW:
             "Decliners Analysis",
             "Market Sentiment & Outlook"
         ]
+        
+        paragraphs = [p.strip() for p in script_text.split('\n\n') if p.strip()]
         
         # Check anti-repetition: no phrase >3 words appears more than twice
         import re
@@ -633,48 +460,18 @@ MARKET OVERVIEW:
             print("[Prototype] Would call OpenAI to rewrite problematic sentences/segments.")
             self.rewrite_problematic_sentences_with_openai(script_text, repeats, paragraphs)
 
-    def rewrite_problematic_sentences_with_openai(self, script_text, repeated_phrases, paragraphs):
-        """
-        For each problematic sentence/segment, call OpenAI to rewrite it to avoid the repeated phrases.
-        Replace the sentence in the script with the OpenAI response. Log errors and fall back to the original if needed.
-        """
-        import re
-        for phrase in repeated_phrases:
-            # Find all paragraphs containing the repeated phrase
-            hits = [p for p in paragraphs if phrase in p]
-            for hit in hits:
-                prompt = (
-                    f"Rewrite the following sentence or segment to avoid the phrase: '{phrase}'.\n"
-                    f"Other phrases to avoid: {repeated_phrases}.\n"
-                    f"Context: {hit}\n"
-                    f"Instructions: Keep the meaning and style appropriate for a professional financial news broadcast."
-                )
-                try:
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system", "content": "You are a financial news script editor."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        max_tokens=256,
-                        temperature=0.7
-                    )
-                    new_text = response.choices[0].message.content.strip()
-                    print(f"[OpenAI] Rewriting segment.\nOld: {hit}\nNew: {new_text}")
-                    # Replace the old segment in script_text (or paragraphs) with the new one
-                    idx = paragraphs.index(hit)
-                    paragraphs[idx] = new_text
-                except Exception as e:
-                    print(f"[OpenAI ERROR] Failed to rewrite segment: {e}. Keeping original.")
-
         assert not repeats, "No 4-word phrase should appear more than twice"
-ross the major US markets. {supporting_host_info['name']}, I've got to say, I'm seeing some really interesting patterns here.\n\n{supporting_host_info['name']}: Absolutely! You know what caught my eye? The way tech stocks are behaving today. We've got this mix of AI plays surging while some of the more traditional names are taking a breather. It's like the market is having a conversation about what's next.\n\n{lead_host_info['name']}: Exactly! And speaking of conversations, did you see the volume on some of these moves? It's not just retail traders - we're seeing institutional money flowing in specific directions. That tells me there's real conviction behind these moves.\n\n{supporting_host_info['name']}: No doubt about it. And with the Fed meeting coming up next week, everyone's trying to position themselves. But let's dive into the specifics - we've got some real winners and losers to talk about today."
+        
+        segments = []
+        current_host = lead_host
+        
+        # Create intro with natural opening
+        intro = f"{lead_host_info['name']}: Good morning, I'm {lead_host_info['name']}, and welcome to today's market analysis!"
         
         # Create segments with alternating hosts
         for i, (paragraph, topic) in enumerate(zip(paragraphs[:4], segment_topics)):
             segments.append({
                 "host": current_host,
-{{ ... }}
                 "text": paragraph,
                 "topic": topic
             })
@@ -711,6 +508,40 @@ ross the major US markets. {supporting_host_info['name']}, I've got to say, I'm 
                 "suzanne_percentage": suzanne_percentage
             }
         }
+
+    def rewrite_problematic_sentences_with_openai(self, script_text, repeated_phrases, paragraphs):
+        """
+        For each problematic sentence/segment, call OpenAI to rewrite it to avoid the repeated phrases.
+        Replace the sentence in the script with the OpenAI response. Log errors and fall back to the original if needed.
+        """
+        import re
+        for phrase in repeated_phrases:
+            # Find all paragraphs containing the repeated phrase
+            hits = [p for p in paragraphs if phrase in p]
+            for hit in hits:
+                prompt = (
+                    f"Rewrite the following sentence or segment to avoid the phrase: '{phrase}'.\n"
+                    f"Other phrases to avoid: {repeated_phrases}.\n"
+                    f"Context: {hit}\n"
+                    f"Instructions: Keep the meaning and style appropriate for a professional financial news broadcast."
+                )
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": "You are a financial news script editor."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=256,
+                        temperature=0.7
+                    )
+                    new_text = response.choices[0].message.content.strip()
+                    print(f"[OpenAI] Rewriting segment.\nOld: {hit}\nNew: {new_text}")
+                    # Replace the old segment in script_text (or paragraphs) with the new one
+                    idx = paragraphs.index(hit)
+                    paragraphs[idx] = new_text
+                except Exception as e:
+                    print(f"[OpenAI ERROR] Failed to rewrite segment: {e}. Keeping original.")
     
     def _validate_and_enhance_script(self, script_data: Dict, market_data: Dict, lead_host: str) -> Dict:
         
@@ -946,6 +777,57 @@ Please fix these issues and return an improved version of the script in the same
                 text_parts.append(outro_text)
 
         return ' '.join(text_parts)
+
+    def generate_script(self, market_data: Dict) -> Dict:
+        """
+        Main entry point for script generation
+        """
+        try:
+            lead_host = self.get_lead_host_for_date()
+            
+            # Create script prompt with market data
+            script_prompt = self.create_script_prompt(market_data, lead_host)
+            
+            # Generate script using OpenAI
+            logger.info(f"Generating script with OpenAI model: {self.model}")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a professional financial news script writer."},
+                    {"role": "user", "content": script_prompt}
+                ],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature
+            )
+            
+            script_text = response.choices[0].message.content.strip()
+            
+            # Create structured script
+            structured_script = self._create_structured_script(script_text, lead_host)
+            
+            # Validate and enhance script
+            enhanced_script = self._validate_and_enhance_script(structured_script, market_data, lead_host)
+            
+            # Add metadata
+            enhanced_script.update({
+                "generation_success": True,
+                "lead_host": lead_host,
+                "market_date": market_data.get('market_date', datetime.now().strftime('%Y-%m-%d')),
+                "generation_timestamp": datetime.now().isoformat()
+            })
+            
+            logger.info("Script generation completed successfully")
+            return enhanced_script
+            
+        except Exception as e:
+            logger.error(f"Script generation failed: {e}")
+            return {
+                "generation_success": False,
+                "error": str(e),
+                "lead_host": self.get_lead_host_for_date(),
+                "market_date": market_data.get('market_date', datetime.now().strftime('%Y-%m-%d')),
+                "generation_timestamp": datetime.now().isoformat()
+            }
 
     def format_script_for_output(self, script_data: Dict) -> str:
         """
