@@ -127,7 +127,7 @@ update_code() {
         success "Updated existing repository"
     else
         # Clone new repository
-        sudo -u "$USER_NAME" git clone https://github.com/your-username/market-voice.git "$APP_DIR"
+        sudo -u "$USER_NAME" git clone https://github.com/csaunders4z/market-voice.git "$APP_DIR"
         success "Cloned new repository"
     fi
 }
@@ -197,14 +197,17 @@ configure_environment() {
 
 # API Keys (REQUIRED)
 OPENAI_API_KEY=your_openai_api_key_here
-NEWS_API_KEY=your_news_api_key_here
-FMP_API_KEY=your_fmp_api_key_here
 ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key_here
+FMP_API_KEY=your_fmp_api_key_here
+FINNHUB_API_KEY=your_finnhub_api_key_here
+
+THE_NEWS_API_API_KEY=your_the_news_api_key_here
+NEWSAPI_API_KEY=your_newsapi_api_key_here
+NEWSDATA_IO_API_KEY=your_newsdata_io_api_key_here
+BIZTOC_API_KEY=your_biztoc_api_key_here
 
 # Optional API Keys
 RAPIDAPI_KEY=your_rapidapi_key_here
-NEWSDATA_IO_API_KEY=your_newsdata_io_api_key_here
-THE_NEWS_API_API_KEY=your_the_news_api_key_here
 
 # Budget Configuration
 MONTHLY_BUDGET=50.0
@@ -347,4 +350,4 @@ main() {
 }
 
 # Run main function
-main "$@" 
+main "$@"  
