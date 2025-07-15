@@ -248,8 +248,18 @@ class MarketVoicesApp:
             if current_costs:
                 summary_lines.append("- Cost breakdown:")
                 for service, cost in current_costs.items():
-                    if cost > 0:
-                        summary_lines.append(f"  - {service}: ${cost:.2f}")
+                    try:
+                        if hasattr(cost, 'monthly_cost'):
+                            cost_value = float(cost.monthly_cost)
+                        elif isinstance(cost, (int, float)):
+                            cost_value = float(cost)
+                        else:
+                            cost_value = 0.0
+                        
+                        if cost_value > 0:
+                            summary_lines.append(f"  - {service}: ${cost_value:.2f}")
+                    except (AttributeError, ValueError, TypeError):
+                        summary_lines.append(f"  - {service}: Cost data unavailable")
                         
         except Exception as e:
             summary_lines.append(f"- Cost tracking error: {str(e)}")
@@ -380,4 +390,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())  
+    exit(main())            
