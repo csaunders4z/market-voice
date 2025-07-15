@@ -232,7 +232,7 @@ class NewsCollector:
     
     def get_the_news_api_news(self, query: str = "NASDAQ", hours_back: int = 24, company: str = None) -> List[Dict]:
         """Get news from The News API with enhanced content and company support"""
-        if not self.the_news_api_key or self.the_news_api_key == "DUMMY":
+        if not self.the_news_api_api_key or self.the_news_api_api_key == "DUMMY":
             logger.info("No The News API key provided, skipping The News API news")
             return []
             
@@ -985,7 +985,7 @@ class NewsCollector:
         try:
             url = "https://api.thenewsapi.com/v1/news/all"
             params = {
-                "api_token": self.the_news_api_key,
+                "api_token": self.the_news_api_api_key,
                 "search": query,
                 "language": "en",
                 "categories": "business",
@@ -1007,7 +1007,7 @@ class NewsCollector:
         try:
             url = "https://api.thenewsapi.com/v1/news/all"
             params = {
-                "api_token": self.the_news_api_key,
+                "api_token": self.the_news_api_api_key,
                 "search": company,
                 "language": "en",
                 "categories": "business",
@@ -1029,7 +1029,7 @@ class NewsCollector:
         try:
             url = "https://api.thenewsapi.com/v1/news/top"
             params = {
-                "api_token": self.the_news_api_key,
+                "api_token": self.the_news_api_api_key,
                 "language": "en",
                 "categories": "business",
                 "limit": str(limit)
@@ -1088,4 +1088,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector() 
+news_collector = NewsCollector()    
