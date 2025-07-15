@@ -4,7 +4,7 @@
 - If the requirements file is missing/unreadable, the script falls back to built-in requirements.
 
 ## Current Goal
-Remove test mode and prepare for production deployment
+Production deployment and go-live validation
 
 - Script generation requirements and quality standards are documented in planning/project-requirements.md and planning/quality-standards.md (MoSCoW, KPIs, technical/content/business requirements).
 - Must/Should/Could features, success metrics, and test design factors are outlined in project-requirements.md and project-overview.md.
@@ -16,3 +16,16 @@ Remove test mode and prepare for production deployment
   - [x] Summarize/document script generation requirements for implementation
   - [x] Create requirements markdown file for user editing and iteration
   - [x] Update production script generation logic to load/apply requirements from markdown file
+
+- [x] Remove test mode and prepare for production deployment
+  - [x] Remove TEST_MODE environment variable checks from settings.py
+  - [x] Remove _generate_mock_script method from script_generator.py
+  - [x] Update data collection to always use production mode
+  - [x] Verify production workflow with real API calls
+
+- [ ] Production deployment and system validation
+  - [ ] Deploy system to production environment
+  - [ ] Execute first production script generation and validation
+  - [ ] Monitor system performance and API costs
+  - [ ] Implement cost optimization (GPT-3.5-turbo switch)
+  - [ ] Set up monitoring and health checks
