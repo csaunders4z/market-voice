@@ -15,7 +15,7 @@ from ..utils.rate_limiter import api_rate_limiter, rate_limiter
 from .fmp_stock_data import fmp_stock_collector
 from .news_collector import news_collector
 from .economic_calendar import economic_calendar
-from .free_news_sources import free_news_collector
+# from .free_news_sources import free_news_collector  # Optional dependency
 from .symbol_loader import symbol_loader
 
 
@@ -28,7 +28,7 @@ class ComprehensiveDataCollector:
         # Load current symbol lists
         self.symbol_lists = self._load_symbol_lists()
         
-    def _load_symbol_lists(self) -> Dict[str, List[str]]:
+    def _load_symbol_lists(self) -> Dict:
         """Load current symbol lists from symbol loader"""
         try:
             # Get symbols from symbol loader
@@ -109,4 +109,4 @@ class ComprehensiveDataCollector:
 
 
 # Global instance
-comprehensive_collector = ComprehensiveDataCollector() 
+comprehensive_collector = ComprehensiveDataCollector()    
