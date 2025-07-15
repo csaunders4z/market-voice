@@ -22,6 +22,9 @@ from src.content_validation.quality_controls import quality_controller
 from src.config.settings import get_settings
 from src.config.security import security_config
 from src.config.logging_config import secure_logging
+from src.utils.budget_monitor import budget_monitor
+from src.utils.cost_analyzer import cost_analyzer
+from src.utils.health_check import run_health_check, print_health_status
 
 # Load environment variables
 load_dotenv()
@@ -106,12 +109,28 @@ class MarketVoicesApp:
             quality_results = quality_controller.validate_script_quality(script_data)
             workflow_result['steps']['quality_validation'] = quality_results
             
-            # Step 4: Save outputs
-            self.logger.info("Step 4: Saving outputs")
+            # Step 4: Track costs and monitor budget
+            self.logger.info("Step 4: Analyzing costs and monitoring budget")
+            try:
+                current_costs = cost_analyzer.calculate_current_costs()
+                total_monthly_cost = cost_analyzer.get_total_monthly_cost(current_costs)
+                budget_status = budget_monitor.get_budget_status()
+                
+                self.logger.info(f"Current monthly cost estimate: ${total_monthly_cost:.2f}")
+                self.logger.info(f"Budget status: {budget_status['status']}")
+                
+                if budget_status['status'] in ['critical', 'over_budget']:
+                    self.logger.warning(f"Budget alert: {budget_status['status']} - Usage: {budget_status.get('usage_percent', 0):.1f}%")
+                    
+            except Exception as e:
+                self.logger.warning(f"Cost tracking failed: {str(e)}")
+            
+            # Step 5: Save outputs
+            self.logger.info("Step 5: Saving outputs")
             self._save_outputs(market_data, script_data, quality_results)
             
-            # Step 5: Cleanup old logs
-            self.logger.info("Step 5: Cleaning up old logs")
+            # Step 6: Cleanup old logs
+            self.logger.info("Step 6: Cleaning up old logs")
             secure_logging.cleanup_old_logs(days=30)
             
             workflow_result['workflow_success'] = True
@@ -152,7 +171,7 @@ class MarketVoicesApp:
             json.dump(quality_results, f, indent=2, default=str)
         self.logger.info(f"Quality report saved to {quality_file}")
         
-        # Save summary
+        # Save summary with cost information
         summary = self._create_summary(market_data, script_data, quality_results)
         summary_file = self.output_dir / f"daily_summary_{timestamp}.txt"
         with open(summary_file, 'w') as f:
@@ -214,6 +233,26 @@ class MarketVoicesApp:
             summary_lines.append("CRITICAL ISSUES:")
             for issue in quality_results['issues'][:3]:  # Show first 3
                 summary_lines.append(f"- {str(issue)}")
+        
+        summary_lines.append("")
+        summary_lines.append("COST AND BUDGET SUMMARY:")
+        try:
+            current_costs = cost_analyzer.calculate_current_costs()
+            total_monthly_cost = cost_analyzer.get_total_monthly_cost(current_costs)
+            budget_status = budget_monitor.get_budget_status()
+            
+            summary_lines.append(f"- Estimated monthly cost: ${total_monthly_cost:.2f}")
+            summary_lines.append(f"- Budget status: {budget_status['status']}")
+            summary_lines.append(f"- Budget usage: {budget_status.get('usage_percent', 0):.1f}%")
+            
+            if current_costs:
+                summary_lines.append("- Cost breakdown:")
+                for service, cost in current_costs.items():
+                    if cost > 0:
+                        summary_lines.append(f"  - {service}: ${cost:.2f}")
+                        
+        except Exception as e:
+            summary_lines.append(f"- Cost tracking error: {str(e)}")
         
         summary_lines.append("")
         summary_lines.append("=" * 80)
@@ -295,6 +334,18 @@ def main():
     
     logger.info("Market Voices starting up")
     
+    if len(sys.argv) > 1 and sys.argv[1] == "--health":
+        print("Running Market Voices health check...")
+        health_results = run_health_check()
+        print_health_status(health_results)
+        
+        if health_results["overall_status"] == "unhealthy":
+            return 1
+        elif health_results["overall_status"] == "degraded":
+            return 2
+        else:
+            return 0
+    
     # Check if running in test mode
     test_mode = "--test" in sys.argv or "-t" in sys.argv
     
@@ -329,4 +380,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main()) 
+    exit(main())  
