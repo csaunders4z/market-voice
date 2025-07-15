@@ -81,7 +81,7 @@ class ProductionValidator:
             self.log_test("API Keys - FMP", "WARNING", "FMP API key not configured")
         
         # Check News API key
-        if not self.settings.news_api_key:
+        if not self.settings.the_news_api_api_key:
             self.log_test("API Keys - NewsAPI", "WARNING", "NewsAPI key not configured")
         
         self.log_test("API Keys - OpenAI", "PASS", "OpenAI API key configured")
@@ -489,4 +489,4 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)  
