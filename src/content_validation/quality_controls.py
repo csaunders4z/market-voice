@@ -112,51 +112,71 @@ class QualityController:
         """Check for repetitive phrases with enhanced detection"""
         result = {'issues': [], 'warnings': [], 'passed_checks': []}
         
-        # Check for 3+ word phrases
-        words = all_text.split()
-        phrases = []
-        
-        for i in range(len(words) - 2):
-            phrase = ' '.join(words[i:i+3])
-            phrases.append(phrase)
-        
-        # Count phrase occurrences
-        phrase_counts = Counter(phrases)
-        repeated_phrases = {phrase: count for phrase, count in phrase_counts.items() 
-                          if count > self.max_phrase_repetitions}
-        
-        # Check for 2-word phrases (more strict)
-        two_word_phrases = []
-        for i in range(len(words) - 1):
-            phrase = ' '.join(words[i:i+2])
-            two_word_phrases.append(phrase)
-        
-        two_word_counts = Counter(two_word_phrases)
-        repeated_two_words = {phrase: count for phrase, count in two_word_counts.items() 
-                            if count > 4}  # Allow up to 4 repetitions for 2-word phrases
-        
-        # Check for single word overuse (excluding common words)
-        common_words = {'the', 'and', 'to', 'of', 'a', 'in', 'is', 'it', 'you', 'that', 'he', 'was', 'for', 'on', 'are', 'as', 'with', 'his', 'they', 'at', 'be', 'this', 'have', 'from', 'or', 'one', 'had', 'by', 'word', 'but', 'not', 'what', 'all', 'were', 'we', 'when', 'your', 'can', 'said', 'there', 'use', 'an', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her', 'would', 'make', 'like', 'into', 'him', 'time', 'two', 'more', 'go', 'no', 'way', 'could', 'my', 'than', 'first', 'been', 'call', 'who', 'its', 'now', 'find', 'long', 'down', 'day', 'did', 'get', 'come', 'made', 'may', 'part'}
-        word_counts = Counter(words)
-        overused_words = {word: count for word, count in word_counts.items() 
-                         if word.lower() not in common_words and count > 8}
-        
-        total_issues = len(repeated_phrases) + len(repeated_two_words) + len(overused_words)
-        
-        if total_issues > 0:
-            result['issues'].append(f"Found {total_issues} repetition issues")
+        try:
+            import re
             
-            # Add specific warnings
-            for phrase, count in list(repeated_phrases.items())[:3]:
-                result['warnings'].append(f"'{phrase}' repeated {count} times")
+            cleaned_text = re.sub(r'[^\w\s]', ' ', all_text.lower())
+            cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+            words = cleaned_text.split()
             
-            for phrase, count in list(repeated_two_words.items())[:3]:
-                result['warnings'].append(f"'{phrase}' repeated {count} times")
+            repeated_phrases = []
             
-            for word, count in list(overused_words.items())[:3]:
-                result['warnings'].append(f"'{word}' used {count} times")
-        else:
-            result['passed_checks'].append("No excessive phrase repetitions found")
+            three_word_phrases = {}
+            for i in range(len(words) - 2):
+                phrase = ' '.join(words[i:i+3])
+                three_word_phrases[phrase] = three_word_phrases.get(phrase, 0) + 1
+            
+            repeated_3word = [phrase for phrase, count in three_word_phrases.items() if count > 2]
+            if repeated_3word:
+                repeated_phrases.extend([f"3-word: {phrase}" for phrase in repeated_3word[:2]])
+            
+            four_word_phrases = {}
+            for i in range(len(words) - 3):
+                phrase = ' '.join(words[i:i+4])
+                four_word_phrases[phrase] = four_word_phrases.get(phrase, 0) + 1
+            
+            repeated_4word = [phrase for phrase, count in four_word_phrases.items() if count > 2]
+            if repeated_4word:
+                repeated_phrases.extend([f"4-word: {phrase}" for phrase in repeated_4word[:2]])
+            
+            five_word_phrases = {}
+            for i in range(len(words) - 4):
+                phrase = ' '.join(words[i:i+5])
+                five_word_phrases[phrase] = five_word_phrases.get(phrase, 0) + 1
+            
+            repeated_5word = [phrase for phrase, count in five_word_phrases.items() if count > 1]
+            if repeated_5word:
+                repeated_phrases.extend([f"5-word: {phrase}" for phrase in repeated_5word[:2]])
+            
+            # Check for 2-word phrases (more strict)
+            two_word_phrases = {}
+            for i in range(len(words) - 1):
+                phrase = ' '.join(words[i:i+2])
+                two_word_phrases[phrase] = two_word_phrases.get(phrase, 0) + 1
+            
+            repeated_two_words = [phrase for phrase, count in two_word_phrases.items() if count > 4]
+            if repeated_two_words:
+                repeated_phrases.extend([f"2-word: {phrase}" for phrase in repeated_two_words[:2]])
+            
+            # Check for single word overuse (excluding common words)
+            common_words = {'the', 'and', 'to', 'of', 'a', 'in', 'is', 'it', 'you', 'that', 'he', 'was', 'for', 'on', 'are', 'as', 'with', 'his', 'they', 'at', 'be', 'this', 'have', 'from', 'or', 'one', 'had', 'by', 'word', 'but', 'not', 'what', 'all', 'were', 'we', 'when', 'your', 'can', 'said', 'there', 'use', 'an', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her', 'would', 'make', 'like', 'into', 'him', 'time', 'two', 'more', 'go', 'no', 'way', 'could', 'my', 'than', 'first', 'been', 'call', 'who', 'its', 'now', 'find', 'long', 'down', 'day', 'did', 'get', 'come', 'made', 'may', 'part'}
+            word_counts = Counter(words)
+            overused_words = {word: count for word, count in word_counts.items() 
+                             if word.lower() not in common_words and count > 8}
+            
+            if overused_words:
+                repeated_phrases.extend([f"overused: {word}" for word in list(overused_words.keys())[:2]])
+            
+            if repeated_phrases:
+                result['issues'].append(f"Repeated phrases detected: {'; '.join(repeated_phrases[:3])}")
+                for phrase in repeated_phrases[:5]:
+                    result['warnings'].append(f"Repetition found: {phrase}")
+            else:
+                result['passed_checks'].append("No excessive phrase repetitions found")
+            
+        except Exception as e:
+            logger.error(f"Error checking phrase repetitions: {e}")
+            result['issues'].append(f"Error checking phrase repetitions: {e}")
         
         return result
     
@@ -308,4 +328,4 @@ class QualityController:
 
 
 # Global instance
-quality_controller = QualityController() 
+quality_controller = QualityController()  

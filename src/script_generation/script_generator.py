@@ -28,6 +28,26 @@ class ScriptGenerator:
         self.temperature = self.settings.temperature
         import pytz
         self.est_tz = pytz.timezone('US/Eastern')
+    
+    def _has_phrase_repetition(self, script: str) -> bool:
+        """Quick check for phrase repetition to trigger regeneration."""
+        try:
+            import re
+            
+            cleaned_script = re.sub(r'[^\w\s]', ' ', script.lower())
+            cleaned_script = re.sub(r'\s+', ' ', cleaned_script).strip()
+            words = cleaned_script.split()
+            
+            four_word_phrases = {}
+            for i in range(len(words) - 3):
+                phrase = ' '.join(words[i:i+4])
+                four_word_phrases[phrase] = four_word_phrases.get(phrase, 0) + 1
+            
+            # Return True if any phrase appears more than twice
+            return any(count > 2 for count in four_word_phrases.values())
+            
+        except Exception:
+            return False
         # Host personalities and characteristics
         self.hosts = {
             'marcus': {
@@ -780,7 +800,7 @@ Please fix these issues and return an improved version of the script in the same
 
     def generate_script(self, market_data: Dict) -> Dict:
         """
-        Main entry point for script generation
+        Main entry point for script generation with phrase repetition prevention
         """
         try:
             lead_host = self.get_lead_host_for_date()
@@ -788,19 +808,51 @@ Please fix these issues and return an improved version of the script in the same
             # Create script prompt with market data
             script_prompt = self.create_script_prompt(market_data, lead_host)
             
+            # Enhanced prompt with phrase repetition prevention
+            enhanced_prompt = f"""
+{script_prompt}
+
+CRITICAL PHRASE REPETITION PREVENTION:
+- AVOID REPETITIVE PHRASING: Do not repeat any 3-word, 4-word, or 5-word phrases
+- Use diverse vocabulary and synonyms to prevent repetition
+- Vary sentence beginnings and structures significantly
+- Use different ways to introduce topics (e.g., "Let's examine...", "Moving to...", "Another key development...", "Turning our attention to...")
+- Vary transition phrases and connecting words
+- Use synonyms for common financial terms (gains/increases/rises, declines/drops/falls, etc.)
+- Avoid repeating exact phrase patterns or sentence structures
+
+Generate a professional financial news script following the above requirements exactly, with special attention to avoiding any repeated phrases."""
+            
             # Generate script using OpenAI
             logger.info(f"Generating script with OpenAI model: {self.model}")
+            
+            # First attempt at script generation
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a professional financial news script writer."},
-                    {"role": "user", "content": script_prompt}
+                    {"role": "system", "content": "You are a professional financial news script writer who creates varied, non-repetitive content."},
+                    {"role": "user", "content": enhanced_prompt}
                 ],
                 max_tokens=self.max_tokens,
                 temperature=self.temperature
             )
             
             script_text = response.choices[0].message.content.strip()
+            
+            if self._has_phrase_repetition(script_text):
+                logger.warning("Initial script had phrase repetition, regenerating with higher temperature")
+                
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional financial news script writer. Create highly varied content with no repeated phrases."},
+                        {"role": "user", "content": enhanced_prompt + "\n\nIMPORTANT: The previous attempt had repeated phrases. Please ensure maximum variety in word choice and sentence structure."}
+                    ],
+                    max_tokens=self.max_tokens,
+                    temperature=min(self.temperature + 0.2, 1.0)
+                )
+                
+                script_text = response.choices[0].message.content.strip()
             
             # Create structured script
             structured_script = self._create_structured_script(script_text, lead_host)
