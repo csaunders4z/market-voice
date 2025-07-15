@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     """Application settings with environment variable support"""
     
     # API Keys
-    alpha_vantage_api_key: str = Field(default_factory=lambda: "DUMMY" if os.getenv("TEST_MODE") == "1" else ..., env="ALPHA_VANTAGE_API_KEY")
-    the_news_api_api_key: str = Field(default_factory=lambda: "DUMMY" if os.getenv("TEST_MODE") == "1" else ..., env="THE_NEWS_API_API_KEY")
-    openai_api_key: str = Field(default_factory=lambda: "DUMMY" if os.getenv("TEST_MODE") == "1" else ..., env="OPENAI_API_KEY")
+    alpha_vantage_api_key: str = Field(..., env="ALPHA_VANTAGE_API_KEY")
+    the_news_api_api_key: str = Field(..., env="THE_NEWS_API_API_KEY")
+    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     rapidapi_key: str = Field(default="", env="RAPIDAPI_KEY")  # Optional for Biztoc news
     biztoc_api_key: str = Field(default="", env="BIZTOC_API_KEY")
     finnhub_api_key: str = Field(default="", env="FINNHUB_API_KEY")
@@ -28,32 +28,16 @@ class Settings(BaseSettings):
     max_retries: int = Field(default=3, env="MAX_RETRIES")
     
     # Data Collection Settings
-    nasdaq_100_symbols: List[str] = Field(
-        default=[
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", 
-            "ADBE", "CRM", "PYPL", "INTC", "AMD", "QCOM", "AVGO", "TXN", 
-            "ORCL", "CSCO", "INTU", "IBM", "ADP", "VRTX", "REGN", "GILD",
-            "ABNB", "UBER", "DASH", "ZM", "PTON", "ROKU", "SNAP", "TWTR",
-            "PINS", "SQ", "SHOP", "ZM", "DOCU", "CRWD", "OKTA", "ZS",
-            "PLTR", "SNOW", "DDOG", "NET", "MDB", "ESTC", "TEAM", "WDAY",
-            "VEEV", "HUBS", "TWLO", "RNG", "ZM", "PTON", "ROKU", "SNAP",
-            "PINS", "SQ", "SHOP", "ZM", "DOCU", "CRWD", "OKTA", "ZS",
-            "PLTR", "SNOW", "DDOG", "NET", "MDB", "ESTC", "TEAM", "WDAY",
-            "VEEV", "HUBS", "TWLO", "RNG", "ZM", "PTON", "ROKU", "SNAP",
-            "PINS", "SQ", "SHOP", "ZM", "DOCU", "CRWD", "OKTA", "ZS",
-            "PLTR", "SNOW", "DDOG", "NET", "MDB", "ESTC", "TEAM", "WDAY"
-        ],
+    nasdaq_100_symbols: str = Field(
+        default="AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA,META,NFLX,ADBE,CRM,PYPL,INTC,AMD,QCOM,AVGO,TXN,ORCL,CSCO,INTU,IBM,ADP,VRTX,REGN,GILD,ABNB,UBER,DASH,ZM,PTON,ROKU,SNAP,PINS,SQ,SHOP,DOCU,CRWD,OKTA,ZS,PLTR,SNOW,DDOG,NET,MDB,ESTC,TEAM,WDAY,VEEV,HUBS,TWLO",
         env="NASDAQ_100_SYMBOLS"
     )
     
-    @field_validator('nasdaq_100_symbols', mode='before')
-    @classmethod
-    def parse_nasdaq_symbols(cls, v):
-        """Parse NASDAQ symbols from comma-separated string or list"""
-        if isinstance(v, str):
-            # Split by comma and strip whitespace
-            return [symbol.strip() for symbol in v.split(',') if symbol.strip()]
-        return v
+    def get_nasdaq_symbols_list(self) -> List[str]:
+        """Get NASDAQ symbols as a list"""
+        if isinstance(self.nasdaq_100_symbols, str):
+            return [symbol.strip() for symbol in self.nasdaq_100_symbols.split(',') if symbol.strip()]
+        return self.nasdaq_100_symbols
     
     # Market Hours (EST)
     market_open_time: time = Field(default=time(9, 30), env="MARKET_OPEN_TIME")
@@ -144,4 +128,4 @@ def get_finnhub_api_key():
     return os.getenv("FINNHUB_API_KEY", "")
 
 def get_alpha_vantage_api_key():
-    return os.getenv("ALPHA_VANTAGE_API_KEY", "") 
+    return os.getenv("ALPHA_VANTAGE_API_KEY", "")    
