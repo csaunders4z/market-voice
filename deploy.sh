@@ -55,7 +55,9 @@ check_requirements() {
     fi
     
     PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
-    if [[ $(echo "$PYTHON_VERSION >= 3.9" | bc -l) -eq 0 ]]; then
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f2)
+    if [[ $PYTHON_MAJOR -lt 3 ]] || [[ $PYTHON_MAJOR -eq 3 && $PYTHON_MINOR -lt 9 ]]; then
         error "Python 3.9 or higher is required. Current version: $PYTHON_VERSION"
     fi
     
@@ -430,4 +432,4 @@ main() {
 }
 
 # Run main function
-main "$@"    
+main "$@"        
