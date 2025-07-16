@@ -368,37 +368,6 @@ class NewsCollector:
         finally:
             logger.info("[MARKET] Exit: _get_biztoc_market_news")
             print("[MARKET] Exit: _get_biztoc_market_news")
-            
-            # Use comprehensive collection first
-            comprehensive_news = self.get_comprehensive_company_news(symbol, company_name, percent_change)
-            if comprehensive_news.get('collection_success') and comprehensive_news.get('summary'):
-                return comprehensive_news['summary']
-            
-            # Fallback to original method, now including Finnhub
-            company_news = self.get_newsapi_news(symbol, 48)
-            biztoc_company_news = self.get_biztoc_news(symbol, 48)
-            finnhub_company_news = finnhub_news_adapter.get_company_news(symbol)
-            
-            # Combine and sort by relevance
-            all_news = company_news + biztoc_company_news + finnhub_company_news
-            if not all_news:
-                return ""
-            
-            # Sort by relevance score
-            sorted_news = sorted(all_news, key=lambda x: x.get('relevance_score', 0), reverse=True)
-            
-            # Take the most relevant news
-            top_news = sorted_news[0]
-            title = top_news.get('title', '')
-            source = top_news.get('source', '')
-            
-            # Create a concise summary
-            if title and source:
-                return f"{title} (via {source})"
-            elif title:
-                return title
-            else:
-                return ""
                 
 
     
@@ -908,6 +877,220 @@ class NewsCollector:
         
         return enhanced_news
     
+    def get_comprehensive_company_news(self, symbol: str, company_name: str, percent_change: float) -> Dict:
+        """
+        Get comprehensive company news from multiple sources including Finnhub sentiment
+        Phase 2: Enhanced integration with Finnhub news and sentiment analysis
+        """
+        logger.info(f"Getting comprehensive news for {symbol} ({company_name})")
+        
+        comprehensive_data = {
+            'symbol': symbol,
+            'company_name': company_name,
+            'percent_change': percent_change,
+            'news_articles': [],
+            'sentiment_data': {},
+            'summary': '',
+            'catalysts': [],
+            'collection_success': False,
+            'sources_used': [],
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        try:
+            all_articles = []
+            
+            try:
+                newsapi_articles = self.get_newsapi_news(symbol, 48)
+                if newsapi_articles:
+                    all_articles.extend(newsapi_articles)
+                    comprehensive_data['sources_used'].append('NewsAPI')
+                    logger.info(f"NewsAPI: {len(newsapi_articles)} articles for {symbol}")
+            except Exception as e:
+                logger.warning(f"NewsAPI failed for {symbol}: {str(e)}")
+            
+            try:
+                biztoc_articles = self.get_biztoc_news(symbol, 48, company_name)
+                if biztoc_articles:
+                    all_articles.extend(biztoc_articles)
+                    comprehensive_data['sources_used'].append('Biztoc')
+                    logger.info(f"Biztoc: {len(biztoc_articles)} articles for {symbol}")
+            except Exception as e:
+                logger.warning(f"Biztoc failed for {symbol}: {str(e)}")
+            
+            try:
+                newsdata_articles = self.get_newsdata_news(symbol, 48, company_name)
+                if newsdata_articles:
+                    all_articles.extend(newsdata_articles)
+                    comprehensive_data['sources_used'].append('NewsData.io')
+                    logger.info(f"NewsData.io: {len(newsdata_articles)} articles for {symbol}")
+            except Exception as e:
+                logger.warning(f"NewsData.io failed for {symbol}: {str(e)}")
+            
+            # 4. Get news from The News API
+            try:
+                thenews_articles = self.get_the_news_api_news(symbol, 48, company_name)
+                if thenews_articles:
+                    all_articles.extend(thenews_articles)
+                    comprehensive_data['sources_used'].append('The News API')
+                    logger.info(f"The News API: {len(thenews_articles)} articles for {symbol}")
+            except Exception as e:
+                logger.warning(f"The News API failed for {symbol}: {str(e)}")
+            
+            try:
+                finnhub_articles = finnhub_news_adapter.get_company_news(symbol)
+                if finnhub_articles:
+                    all_articles.extend(finnhub_articles)
+                    comprehensive_data['sources_used'].append('Finnhub')
+                    logger.info(f"Finnhub: {len(finnhub_articles)} articles for {symbol}")
+            except Exception as e:
+                logger.warning(f"Finnhub news failed for {symbol}: {str(e)}")
+            
+            try:
+                sentiment_data = finnhub_news_adapter.get_news_sentiment(symbol)
+                if sentiment_data:
+                    comprehensive_data['sentiment_data'] = sentiment_data
+                    logger.info(f"Finnhub sentiment data collected for {symbol}")
+            except Exception as e:
+                logger.warning(f"Finnhub sentiment failed for {symbol}: {str(e)}")
+            
+            # Deduplicate and sort articles
+            unique_articles = self._deduplicate_news(all_articles)
+            sorted_articles = sorted(unique_articles, 
+                                   key=lambda x: (x.get('relevance_score', 0), x.get('published_at', '')), 
+                                   reverse=True)
+            
+            # Filter to today's articles and take top articles
+            today_articles = self._filter_today_articles(sorted_articles)
+            top_articles = today_articles[:10] if today_articles else sorted_articles[:10]
+            
+            comprehensive_data['news_articles'] = top_articles
+            
+            catalysts = self._identify_news_catalysts(top_articles)
+            comprehensive_data['catalysts'] = catalysts
+            
+            # Create comprehensive summary with sentiment integration
+            summary = self._create_comprehensive_summary(
+                symbol, company_name, percent_change, top_articles, 
+                comprehensive_data['sentiment_data'], catalysts
+            )
+            comprehensive_data['summary'] = summary
+            
+            if top_articles or comprehensive_data['sentiment_data']:
+                comprehensive_data['collection_success'] = True
+                logger.info(f"Comprehensive news collection successful for {symbol}: "
+                           f"{len(top_articles)} articles, {len(comprehensive_data['sources_used'])} sources, "
+                           f"sentiment: {'Yes' if comprehensive_data['sentiment_data'] else 'No'}")
+            else:
+                logger.warning(f"No news or sentiment data collected for {symbol}")
+                # Provide fallback summary
+                comprehensive_data['summary'] = self._create_fallback_news_summary(symbol, company_name, percent_change)
+                comprehensive_data['collection_success'] = True  # Still mark as successful with fallback
+            
+        except Exception as e:
+            logger.error(f"Error in comprehensive news collection for {symbol}: {str(e)}")
+            comprehensive_data['error'] = str(e)
+            # Provide fallback summary even on error
+            comprehensive_data['summary'] = self._create_fallback_news_summary(symbol, company_name, percent_change)
+            comprehensive_data['collection_success'] = True  # Mark as successful with fallback
+        
+        return comprehensive_data
+    
+    def _create_comprehensive_summary(self, symbol: str, company_name: str, percent_change: float, 
+                                    articles: List[Dict], sentiment_data: Dict, catalysts: List[str]) -> str:
+        """
+        Create a comprehensive news summary integrating multiple sources and Finnhub sentiment
+        Phase 2: Enhanced with sentiment analysis
+        """
+        if not articles and not sentiment_data:
+            return self._create_fallback_news_summary(symbol, company_name, percent_change)
+        
+        summary_parts = []
+        direction = "gained" if percent_change > 0 else "declined"
+        
+        summary_parts.append(f"{company_name} ({symbol}) {direction} {abs(percent_change):.2f}% today")
+        
+        if sentiment_data:
+            company_score = sentiment_data.get('companyNewsScore', 0)
+            sector_score = sentiment_data.get('sectorAverageNewsScore', 0)
+            
+            if company_score != 0:
+                sentiment_desc = "positive" if company_score > 0.1 else "negative" if company_score < -0.1 else "neutral"
+                summary_parts.append(f"with {sentiment_desc} news sentiment (score: {company_score:.2f})")
+                
+                if sector_score != 0:
+                    relative_sentiment = "above" if company_score > sector_score else "below"
+                    summary_parts.append(f"{relative_sentiment} sector average ({sector_score:.2f})")
+        
+        # Add catalyst information
+        if catalysts:
+            catalyst_text = ", ".join(catalysts[:3])  # Top 3 catalysts
+            summary_parts.append(f"driven by {catalyst_text}")
+        
+        if articles:
+            top_article = articles[0]
+            title = top_article.get('title', '')
+            source = top_article.get('source', '')
+            
+            if title:
+                if len(title) > 100:
+                    title = title[:97] + "..."
+                summary_parts.append(f'Key news: "{title}"')
+                
+                if source:
+                    summary_parts.append(f"(via {source})")
+            
+            # Add additional context from other sources
+            if len(articles) > 1:
+                additional_sources = set()
+                for article in articles[1:4]:  # Next 3 articles
+                    article_source = article.get('source', '')
+                    if article_source and article_source != source:
+                        additional_sources.add(article_source)
+                
+                if additional_sources:
+                    sources_text = ", ".join(list(additional_sources)[:2])
+                    summary_parts.append(f"Additional coverage from {sources_text}")
+        
+        return ". ".join(summary_parts) + "."
+    
+    def get_company_news_summary(self, symbol: str, company_name: str, percent_change: float) -> str:
+        """Get a comprehensive news summary for a specific company"""
+        try:
+            # Use comprehensive collection first
+            comprehensive_news = self.get_comprehensive_company_news(symbol, company_name, percent_change)
+            if comprehensive_news.get('collection_success') and comprehensive_news.get('summary'):
+                return comprehensive_news['summary']
+            
+            # Fallback to original method, now including Finnhub
+            company_news = self.get_newsapi_news(symbol, 48)
+            biztoc_company_news = self.get_biztoc_news(symbol, 48)
+            finnhub_company_news = finnhub_news_adapter.get_company_news(symbol)
+            
+            # Combine and sort by relevance
+            all_news = company_news + biztoc_company_news + finnhub_company_news
+            if not all_news:
+                return ""
+            
+            # Sort by relevance score
+            sorted_news = sorted(all_news, key=lambda x: x.get('relevance_score', 0), reverse=True)
+            
+            # Take the most relevant news
+            top_news = sorted_news[0]
+            title = top_news.get('title', '')
+            source = top_news.get('source', '')
+            
+            # Create a concise summary
+            if title and source:
+                return f"{title} (via {source})"
+            elif title:
+                return title
+            else:
+                return ""
+        except Exception as e:
+            logger.error(f"Error getting company news summary for {symbol}: {str(e)}")
+            return self._create_fallback_news_summary(symbol, company_name, percent_change)
+    
     def _get_newsdata_search(self, query: str, limit: int = 10) -> List[Dict]:
         """Get articles from NewsData.io search endpoint"""
         try:
@@ -1088,4 +1271,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector()    
+news_collector = NewsCollector()        
