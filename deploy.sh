@@ -184,11 +184,79 @@ EOF
     success "Created systemd service: $SERVICE_NAME"
 }
 
+# Check if .env file contains real API keys (not template placeholders)
+has_real_api_keys() {
+    local env_file="$1"
+    
+    if [[ ! -f "$env_file" ]]; then
+        return 1  # File doesn't exist, no real keys
+    fi
+    
+    if grep -q "your_.*_api_key_here\|your_.*_key_here\|INSERT_.*_HERE\|REPLACE_.*_HERE" "$env_file"; then
+        return 1  # Contains template placeholders
+    fi
+    
+    # Check if file has actual API key values (non-empty, non-placeholder)
+    local has_keys=false
+    while IFS='=' read -r key value; do
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$key" ]] && continue
+        
+        if [[ "$key" =~ API_KEY$ ]] && [[ -n "$value" ]] && [[ "$value" != "your_"*"_here" ]]; then
+            has_keys=true
+            break
+        fi
+    done < "$env_file"
+    
+    if $has_keys; then
+        return 0  # Has real API keys
+    else
+        return 1  # No real API keys found
+    fi
+}
+
+# Backup existing .env file with real API keys
+backup_env_file() {
+    local env_file="$1"
+    local backup_dir="$2"
+    
+    if [[ ! -f "$env_file" ]]; then
+        return 0  # No file to backup
+    fi
+    
+    # Create backup directory
+    sudo mkdir -p "$backup_dir"
+    sudo chown -R "$USER_NAME:$USER_NAME" "$backup_dir"
+    
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_file="$backup_dir/.env.backup.$timestamp"
+    
+    sudo cp "$env_file" "$backup_file"
+    sudo chown "$USER_NAME:$USER_NAME" "$backup_file"
+    
+    success "Created backup: $backup_file"
+}
+
 # Configure environment variables
 configure_environment() {
     log "Configuring environment variables..."
     
     ENV_FILE="/etc/$APP_NAME/.env"
+    BACKUP_DIR="/etc/$APP_NAME/backups"
+    
+    # Check if existing .env has real API keys
+    if has_real_api_keys "$ENV_FILE"; then
+        warning "Existing .env file contains real API keys!"
+        backup_env_file "$ENV_FILE" "$BACKUP_DIR"
+        
+        warning "CRITICAL: Your existing API keys have been backed up."
+        warning "The deployment will create a new template .env file."
+        warning "You MUST restore your API keys after deployment completes."
+        warning "Backup location: $BACKUP_DIR"
+        
+        echo "Press Enter to continue with deployment (this will overwrite .env)..."
+        read -r
+    fi
     
     # Create environment file template
     sudo -u "$USER_NAME" tee "$ENV_FILE" > /dev/null <<EOF
@@ -222,6 +290,13 @@ OUTPUT_DIRECTORY=output
 EOF
     
     warning "Please update the environment file at $ENV_FILE with your actual API keys"
+    
+    # Check if we created backups and remind user
+    if [[ -d "$BACKUP_DIR" ]] && [[ "$(ls -A $BACKUP_DIR 2>/dev/null)" ]]; then
+        warning "REMINDER: Your original API keys are backed up in $BACKUP_DIR"
+        warning "Use the most recent backup file to restore your keys."
+    fi
+    
     success "Created environment configuration"
 }
 
@@ -314,7 +389,12 @@ deployment_summary() {
     echo "Log File: $LOG_FILE"
     echo
     echo "Next Steps:"
-    echo "1. Update API keys in /etc/$APP_NAME/.env"
+    if [[ -d "/etc/$APP_NAME/backups" ]] && [[ "$(ls -A /etc/$APP_NAME/backups 2>/dev/null)" ]]; then
+        echo "1. RESTORE API keys from backup: /etc/$APP_NAME/backups/"
+        echo "2. Update any missing API keys in /etc/$APP_NAME/.env"
+    else
+        echo "1. Update API keys in /etc/$APP_NAME/.env"
+    fi
     echo "2. Configure your domain and SSL certificate"
     echo "3. Set up monitoring and alerting"
     echo "4. Test the application thoroughly"
@@ -350,4 +430,4 @@ main() {
 }
 
 # Run main function
-main "$@"  
+main "$@"    
