@@ -9,7 +9,7 @@
 ## Active Tasks
 
 ### News & Catalyst Enhancement
-- [ ] **Integrate Finnhub news/sentiment in NewsCollector (phase 2)** - *Current Priority*
+- [x] **Integrate Finnhub news/sentiment in NewsCollector (phase 2)** - ✅ **COMPLETED**
 - [ ] Tune "today" logic for news (time zones, late-night/overnight articles)
 - [ ] Enhance catalyst detection (earnings, upgrades, M&A, etc.)
 - [ ] Add more news sources or robust fallback for low-news days
@@ -38,6 +38,15 @@
 ---
 
 ## Completed Tasks
+
+### Finnhub Integration Phase 2 ✅ **COMPLETED & MERGED (PR #14)** - July 16, 2025
+- [x] Implemented comprehensive news collection with sentiment analysis from Finnhub
+- [x] Added .env protection safeguards to prevent API key overwrites during deployment
+- [x] Created comprehensive testing suite with 4/4 tests passing
+- [x] Fixed deploy.sh Python version check (was rejecting Python 3.12)
+- [x] Validated deploy.sh functionality with .env protection - all safeguards working correctly
+- [x] Added backup/restore utilities for .env files
+- [x] Enhanced NewsCollector with get_comprehensive_company_news and sentiment integration
 
 ### Production Deployment ✅ **COMPLETED & MERGED (PR #6)**
 - [x] Deploy system to production environment
