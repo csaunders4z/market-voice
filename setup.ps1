@@ -32,9 +32,13 @@ try {
 
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Green
-Write-Host "1. Copy config.env.example to .env" -ForegroundColor White
-Write-Host "2. Add your API keys to .env file" -ForegroundColor White
-Write-Host "3. Run: python test_system.py" -ForegroundColor White
-Write-Host "4. Run: python main.py --test" -ForegroundColor White
+Write-Host "1. IMPORTANT: Check if you have an existing .env with API keys" -ForegroundColor Yellow
+Write-Host "2. If you do, run backup_env.ps1 BEFORE copying template" -ForegroundColor Yellow
+Write-Host "3. Copy config.env.example to .env ONLY if no real keys exist" -ForegroundColor White
+Write-Host "4. Add your API keys to .env file" -ForegroundColor White
+Write-Host "5. Run: python test_system.py" -ForegroundColor White
+Write-Host "6. Run: python main.py --test" -ForegroundColor White
 Write-Host ""
-Read-Host "Press Enter to continue" 
+Write-Host "CRITICAL: Use setup_env.ps1 for safe .env setup with protection!" -ForegroundColor Red
+Write-Host ""
+Read-Host "Press Enter to continue"  
