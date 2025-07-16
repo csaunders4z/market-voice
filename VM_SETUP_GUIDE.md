@@ -79,8 +79,15 @@
    ```
 
 ## Step 8: Configure Environment Variables
-1. Create .env file:
+1. Create .env file safely:
    ```bash
+   # Check if .env already exists first
+   ls -la .env
+   
+   # If .env exists and contains real API keys, back it up first:
+   # mkdir -p backups && cp .env backups/.env.backup.$(date +%Y%m%d_%H%M%S)
+   
+   # Only copy template if no real keys exist:
    cp config.env.example .env
    ```
 
@@ -166,4 +173,4 @@
 1. Export VM as OVA file periodically
 2. Use Git for code version control
 3. Backup .env file securely
-4. Document any custom configurations 
+4. Document any custom configurations  

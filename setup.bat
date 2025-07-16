@@ -32,14 +32,17 @@ echo.
 echo Dependencies installed successfully!
 echo.
 echo Next steps:
-echo 1. Copy config.env.example to .env (WARNING: This will overwrite existing .env!)
-echo 2. IMPORTANT: If you have an existing .env with API keys, back it up first!
-echo 3. Add your API keys to .env file
-echo 4. Run: python test_system.py
-echo 5. Run: python main.py --test
+echo 1. IMPORTANT: Check if you have an existing .env with API keys
+echo 2. If you do, run: backup_env.ps1 BEFORE copying template
+echo 3. Copy config.env.example to .env ONLY if no real keys exist
+echo 4. Add your API keys to .env file
+echo 5. Run: python test_system.py
+echo 6. Run: python main.py --test
 echo.
-echo SAFEGUARD REMINDER:
-echo - Use backup_env.ps1 before overwriting .env files
+echo CRITICAL SAFEGUARD REMINDERS:
+echo - NEVER overwrite .env files with real API keys
+echo - Use backup_env.ps1 before any .env modifications
 echo - Use restore_env.ps1 to recover from accidental overwrites
+echo - Check .env content before running setup scripts
 echo.
-pause  
+pause      

@@ -73,8 +73,15 @@ pip install -r requirements.txt
 
 ### Step 3: Configure Environment Variables
 
-1. **Copy the example configuration:**
+1. **Copy the example configuration safely:**
    ```bash
+   # IMPORTANT: Check if .env already exists
+   ls -la .env
+   
+   # If .env contains real API keys, back it up first!
+   # Use: backup_env.ps1 (Windows) or manual backup (Linux/Mac)
+   
+   # Only copy template if no real keys exist:
    cp config.env.example .env
    ```
 
@@ -246,4 +253,4 @@ If you encounter issues:
 
 ---
 
-**Ready to start?** Run `python test_system.py` to verify your setup! 
+**Ready to start?** Run `python test_system.py` to verify your setup!  
