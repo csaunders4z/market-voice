@@ -10,7 +10,29 @@
 
 ## Active Tasks
 
-### Script Quality Enhancement (NEXT PRIORITY)
+### News Collection System Restoration (CRITICAL PRIORITY)
+- [ ] **Fix API Authentication Issues**
+  - [ ] Resolve NewsAPI 401 Unauthorized errors despite configured keys
+  - [ ] Verify Finnhub API key permissions and rate limits
+  - [ ] Test all news API endpoints individually for authentication
+- [ ] **Fix Missing Methods and Implementation Bugs**
+  - [ ] Implement missing `_get_biztoc_trending` method in NewsCollector
+  - [ ] Fix `get_market_news` method in FreeNewsCollector
+  - [ ] Resolve circular import issues preventing module initialization
+- [ ] **Fix Silent Failure Logic**
+  - [ ] Modify `collection_success` to accurately reflect actual data collection
+  - [ ] Replace silent failures with proper error reporting and detailed logging
+  - [ ] Add comprehensive error tracking for each API failure
+- [ ] **Fix Relevance Scoring Algorithm**
+  - [ ] Debug why all free news articles show 0.0 relevance scores
+  - [ ] Test relevance calculation with known good data
+  - [ ] Ensure proper keyword matching and scoring functionality
+- [ ] **Repair Enhanced News Collection**
+  - [ ] Fix web scraping components causing garbled ft.com content
+  - [ ] Implement proper error handling for failed scrapes
+  - [ ] Add fallback mechanisms for scraping failures
+
+### Script Quality Enhancement (HIGH PRIORITY)
 - [ ] **Fine-tune script generation quality and content structure**
 - [ ] Improve speaking time balance between hosts Marcus and Suzanne
 - [ ] Enhance script flow and reduce repetitive phrases
@@ -47,6 +69,14 @@
 ---
 
 ## Completed Tasks
+
+### News Collection Failure Analysis ✅ **COMPLETED** - July 16, 2025
+- [x] **Comprehensive analysis of market_data_20250716_042248.json file**
+- [x] Identified complete news collection failure (all 60 stocks with empty news_articles arrays)
+- [x] Created diagnostic script revealing API authentication failures and missing methods
+- [x] Documented root causes: NewsAPI 401 errors, missing `_get_biztoc_trending` method, broken relevance scoring
+- [x] Formulated comprehensive 3-phase action plan for news collection restoration
+- [x] Confirmed APIs are functional (Biztoc returning data) but collection framework has implementation bugs
 
 ### .env Protection & Production Validation ✅ **COMPLETED & MERGED (PR #16)** - July 16, 2025
 - [x] **Fixed critical .env overwrite issue across all setup scripts**
