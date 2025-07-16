@@ -28,4 +28,24 @@ Throughout the script, use clear and precise language. Speak to a financially li
 
 When you are ready to begin writing the script, you will receive a list of ten stocks (five gainers, five losers), with data for each including: company name, ticker, percent change, current price, relevant news headlines with summaries and sources, any flagged technical indicators, trading volume, and sector or industry context. Use all of that information to guide what you write—but the result must read as a clean, flowing, natural script.
 
-Do not add stage directions or markup. Do not explain what you’re doing. Simply write the script, alternating speakers naturally. Begin with the appropriate host intro, then proceed into the first stock. Alternate speakers every 1 to 3 stocks. End the script with a sign-off appropriate for wrapping up a news program and, if a Friday, making an approprate comment about the weekend, such as wishing the viewer a good weekend.
+Do not add stage directions or markup. Do not explain what you're doing. Simply write the script, alternating speakers naturally. Begin with the appropriate host intro, then proceed into the first stock. Alternate speakers every 1 to 3 stocks. End the script with a sign-off appropriate for wrapping up a news program and, if a Friday, making an approprate comment about the weekend, such as wishing the viewer a good weekend.
+
+## Script Quality Requirements
+
+### Time-Accurate Greetings
+- The intro greeting must be accurate based on U.S. Eastern Time Zone
+- Use "Good morning" for episodes airing before 12:00 PM ET
+- Use "Good afternoon" for episodes airing 12:00 PM - 6:00 PM ET  
+- Use "Good evening" for episodes airing after 6:00 PM ET
+- Simply welcome viewers in the intro - do not use conflicting time references in different segments
+
+### Host Background References
+- Hosts should assume viewers already know their professional backgrounds
+- Do not mention Suzanne's Wall Street trading experience or Marcus's analyst background unless it's relevant casual conversation
+- Focus on market analysis rather than credentials - the audience trusts their expertise
+
+### News Validation Requirements
+- When no specific news is found for 2 or more stocks, this indicates a potential issue with news source functionality
+- In such cases, acknowledge the lack of clear catalysts but investigate news collection systems
+- All major stock movements should have identifiable news drivers - if multiple stocks lack news explanations, the news aggregation may need attention
+- Prioritize finding and reporting actual news catalysts over generic explanations about "institutional activity" or "technical factors"d.
