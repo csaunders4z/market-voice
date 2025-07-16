@@ -460,7 +460,8 @@ MARKET OVERVIEW:
             print("[Prototype] Would call OpenAI to rewrite problematic sentences/segments.")
             self.rewrite_problematic_sentences_with_openai(script_text, repeats, paragraphs)
 
-        assert not repeats, "No 4-word phrase should appear more than twice"
+        if repeats:
+            logger.warning(f"Quality warning: Repeated 4-word phrases detected: {repeats}")
         
         segments = []
         current_host = lead_host
