@@ -9,7 +9,19 @@ print("🔍 Testing End-to-End News Collection")
 print("=====================================")
 
 def setup_test_environment():
-    """Set up test environment with DUMMY API keys"""
+    """Set up test environment with DUMMY API keys using safe method"""
+    import sys
+    sys.path.insert(0, os.path.join(os.getcwd(), 'src'))
+    from utils.test_env_manager import SafeTestEnvironment
+    
+    test_env = SafeTestEnvironment()
+    if os.path.exists('.env') and test_env.has_real_api_keys('.env'):
+        print("🚨 WARNING: .env contains real API keys - creating backup")
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_file = f'.env.backup.{timestamp}'
+        shutil.copy('.env', backup_file)
+        print(f"✅ Backup created: {backup_file}")
+    
     if os.path.exists('.env.backup'):
         os.remove('.env.backup')
     
@@ -28,7 +40,7 @@ def setup_test_environment():
     os.environ['NEWSDATA_IO_API_KEY'] = 'DUMMY'
     os.environ['LOG_LEVEL'] = 'INFO'
     
-    print("✅ Test environment set up with DUMMY API keys")
+    print("✅ Test environment set up with DUMMY API keys (safely)")
 
 def restore_environment():
     """Restore original environment"""
