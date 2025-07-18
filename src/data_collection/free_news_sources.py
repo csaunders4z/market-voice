@@ -10,6 +10,7 @@ import re
 from bs4 import BeautifulSoup
 import feedparser
 import time
+import pytz
 
 from src.config.settings import get_settings
 
@@ -19,6 +20,7 @@ class FreeNewsCollector:
     
     def __init__(self):
         self.settings = get_settings()
+        self.market_tz = pytz.timezone('US/Eastern')
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -60,7 +62,7 @@ class FreeNewsCollector:
                             'description': description,
                             'url': url,
                             'source': 'MarketWatch',
-                            'published_at': datetime.now().isoformat(),
+                            'published_at': datetime.now(self.market_tz).isoformat(),
                             'relevance_score': self._calculate_relevance_score({'title': title, 'description': description}, query)
                         })
                         
@@ -331,7 +333,7 @@ class FreeNewsCollector:
         return unique_articles
     
     def _is_today_article(self, published_at: str) -> bool:
-        """Check if article was published today"""
+        """Check if article was published today (in market timezone)"""
         if not published_at:
             return False
         
@@ -343,16 +345,20 @@ class FreeNewsCollector:
             elif ' ' in published_at and len(published_at) > 10:
                 # Common format: "2024-01-15 10:30:00"
                 article_date = datetime.strptime(published_at, '%Y-%m-%d %H:%M:%S')
+                article_date = article_date.replace(tzinfo=pytz.UTC)
             elif len(published_at) == 10:
                 # Date only: "2024-01-15"
                 article_date = datetime.strptime(published_at, '%Y-%m-%d')
+                article_date = article_date.replace(tzinfo=pytz.UTC)
             elif ',' in published_at and 'GMT' in published_at:
                 # RSS format: "Tue, 08 Jul 2025 03:21:00 GMT"
                 try:
                     article_date = datetime.strptime(published_at, '%a, %d %b %Y %H:%M:%S GMT')
+                    article_date = article_date.replace(tzinfo=pytz.UTC)
                 except ValueError:
                     # Try alternative format without day name
                     article_date = datetime.strptime(published_at, '%d %b %Y %H:%M:%S GMT')
+                    article_date = article_date.replace(tzinfo=pytz.UTC)
             else:
                 # Try to parse as relative time (e.g., "2 hours ago", "Today")
                 if 'today' in published_at.lower() or 'now' in published_at.lower():
@@ -360,11 +366,16 @@ class FreeNewsCollector:
                 # For other formats, assume it's recent if we can't parse it
                 return True
             
-            # Get today's date (start of day)
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            if article_date.tzinfo is None:
+                article_date = article_date.replace(tzinfo=pytz.UTC)
+            article_date_market = article_date.astimezone(self.market_tz)
             
-            # Check if article is from today
-            return article_date.date() == today.date()
+            # Get today's date in market timezone (start of day)
+            market_now = datetime.now(self.market_tz)
+            today_market = market_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Check if article is from today in market timezone
+            return article_date_market.date() == today_market.date()
             
         except Exception as e:
             logger.debug(f"Error parsing date '{published_at}': {str(e)}")
