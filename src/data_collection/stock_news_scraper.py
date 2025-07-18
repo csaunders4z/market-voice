@@ -136,6 +136,7 @@ class StockNewsScraper:
                         published_at = time_elem.get_text(strip=True) if time_elem else ""
                         
                         if title and len(title) > 10:  # Valid title
+                            catalyst_type = self._identify_article_catalyst(title, description)
                             article = NewsArticle(
                                 title=title,
                                 description=description,
@@ -144,7 +145,8 @@ class StockNewsScraper:
                                 source="Yahoo Finance",
                                 published_at=published_at,
                                 relevance_score=self._calculate_relevance_score(title, description, symbol),
-                                word_count=len(f"{title} {description}".split())
+                                word_count=len(f"{title} {description}".split()),
+                                catalyst_type=catalyst_type
                             )
                             articles.append(article)
                             
@@ -200,6 +202,7 @@ class StockNewsScraper:
                     published_at = time_elem.get_text(strip=True) if time_elem else ""
                     
                     if title and len(title) > 10:
+                        catalyst_type = self._identify_article_catalyst(title, description)
                         article = NewsArticle(
                             title=title,
                             description=description,
@@ -209,7 +212,8 @@ class StockNewsScraper:
                             published_at=published_at,
                             author=author,
                             relevance_score=self._calculate_relevance_score(title, description, symbol),
-                            word_count=len(f"{title} {description}".split())
+                            word_count=len(f"{title} {description}".split()),
+                            catalyst_type=catalyst_type
                         )
                         articles.append(article)
                         
@@ -267,6 +271,7 @@ class StockNewsScraper:
                         published_at = time_elem.get_text(strip=True) if time_elem else ""
                         
                         if title and len(title) > 10:
+                            catalyst_type = self._identify_article_catalyst(title, description)
                             article = NewsArticle(
                                 title=title,
                                 description=description,
@@ -275,7 +280,8 @@ class StockNewsScraper:
                                 source="MarketWatch",
                                 published_at=published_at,
                                 relevance_score=self._calculate_relevance_score(title, description, symbol),
-                                word_count=len(f"{title} {description}".split())
+                                word_count=len(f"{title} {description}".split()),
+                                catalyst_type=catalyst_type
                             )
                             articles.append(article)
                             
@@ -327,6 +333,7 @@ class StockNewsScraper:
                     published_at = time_elem.get_text(strip=True) if time_elem else ""
                     
                     if title and len(title) > 10:
+                        catalyst_type = self._identify_article_catalyst(title, description)
                         article = NewsArticle(
                             title=title,
                             description=description,
@@ -335,7 +342,8 @@ class StockNewsScraper:
                             source="Benzinga",
                             published_at=published_at,
                             relevance_score=self._calculate_relevance_score(title, description, symbol),
-                            word_count=len(f"{title} {description}".split())
+                            word_count=len(f"{title} {description}".split()),
+                            catalyst_type=catalyst_type
                         )
                         articles.append(article)
                         
@@ -391,6 +399,7 @@ class StockNewsScraper:
                         source = f"Finviz ({source_elem.get_text(strip=True)})" if source_elem else "Finviz"
                         
                         if title and len(title) > 10:
+                            catalyst_type = self._identify_article_catalyst(title, "")
                             article = NewsArticle(
                                 title=title,
                                 description="",  # Finviz usually only has headlines
@@ -399,7 +408,8 @@ class StockNewsScraper:
                                 source=source,
                                 published_at=published_at,
                                 relevance_score=self._calculate_relevance_score(title, "", symbol),
-                                word_count=len(title.split())
+                                word_count=len(title.split()),
+                                catalyst_type=catalyst_type
                             )
                             articles.append(article)
                             
@@ -455,7 +465,7 @@ class StockNewsScraper:
         return result
     
     def _calculate_relevance_score(self, title: str, description: str, symbol: str) -> float:
-        """Calculate relevance score for an article"""
+        """Calculate relevance score for an article with enhanced catalyst weighting"""
         score = 0.0
         
         title_lower = title.lower()
@@ -468,43 +478,126 @@ class StockNewsScraper:
         if symbol_lower in desc_lower:
             score += 1.5
         
-        # Financial keywords
-        financial_keywords = [
-            'earnings', 'revenue', 'profit', 'loss', 'guidance', 'outlook',
-            'analyst', 'upgrade', 'downgrade', 'price target', 'rating',
-            'acquisition', 'merger', 'partnership', 'deal', 'contract',
-            'product launch', 'approval', 'regulatory', 'fda', 'sec',
-            'dividend', 'buyback', 'split', 'ipo', 'spinoff',
-            'beat', 'miss', 'surprise', 'forecast', 'estimate'
+        high_impact_keywords = [
+            'earnings beat', 'earnings miss', 'revenue growth', 'guidance raise',
+            'guidance cut', 'guidance lowered', 'acquisition', 'merger', 'takeover', 'buyout',
+            'fda approval', 'drug approval', 'regulatory approval', 'breakthrough', 'innovation',
+            'clinical trial results', 'phase 3', 'phase 2', 'study results'
         ]
         
-        for keyword in financial_keywords:
+        for keyword in high_impact_keywords:
             if keyword in title_lower:
-                score += 1.0
+                score += 3.0
             if keyword in desc_lower:
-                score += 0.5
+                score += 1.5
         
-        # Market catalyst keywords (higher weight)
-        catalyst_keywords = [
-            'breakthrough', 'innovation', 'breakthrough', 'launch',
-            'partnership', 'deal', 'acquisition', 'merger',
-            'approval', 'regulatory', 'fda approval',
-            'earnings beat', 'revenue growth', 'guidance raise'
+        medium_impact_keywords = [
+            'earnings', 'revenue', 'profit', 'loss', 'guidance', 'outlook',
+            'upgrade', 'downgrade', 'price target', 'analyst rating', 'buy rating', 'sell rating',
+            'partnership', 'deal', 'contract', 'agreement', 'collaboration',
+            'product launch', 'new product', 'clinical trial', 'study',
+            'dividend', 'buyback', 'share repurchase', 'stock split', 'spin-off',
+            'insider buying', 'insider selling', 'ceo', 'management change'
         ]
         
-        for keyword in catalyst_keywords:
+        for keyword in medium_impact_keywords:
             if keyword in title_lower:
                 score += 2.0
             if keyword in desc_lower:
                 score += 1.0
         
+        # Low impact financial keywords
+        low_impact_keywords = [
+            'forecast', 'estimate', 'expects', 'anticipates', 'projects',
+            'regulatory', 'compliance', 'investigation', 'lawsuit', 'settlement',
+            'insider', 'executive', 'board', 'director', 'officer',
+            'beat', 'miss', 'surprise', 'ipo', 'offering', 'debt', 'cash'
+        ]
+        
+        for keyword in low_impact_keywords:
+            if keyword in title_lower:
+                score += 1.0
+            if keyword in desc_lower:
+                score += 0.5
+        
+        catalyst_type = self._identify_article_catalyst(title, description)
+        if catalyst_type:
+            score += 1.0
+        
         # Recency bonus (approximate)
-        time_keywords = ['today', 'breaking', 'just', 'now', 'latest']
+        time_keywords = ['today', 'breaking', 'just', 'now', 'latest', 'urgent']
         for keyword in time_keywords:
             if keyword in title_lower:
                 score += 0.5
         
         return score
+    
+    def _identify_article_catalyst(self, title: str, description: str) -> str:
+        """Identify the primary catalyst type for a single article"""
+        content = f"{title} {description}".lower()
+        
+        catalyst_patterns = {
+            'earnings': [
+                'earnings beat', 'earnings miss', 'quarterly results', 'earnings report',
+                'earnings', 'eps', 'revenue', 'profit', 'q1', 'q2', 'q3', 'q4',
+                'fiscal year', 'financial results', 'earnings call'
+            ],
+            'merger_acquisition': [
+                'acquisition', 'merger', 'takeover', 'buyout', 'acquired', 'merge',
+                'purchase', 'bid', 'offer', 'transaction', 'deal worth', 'cash deal'
+            ],
+            'analyst_action': [
+                'upgrade', 'downgrade', 'price target', 'buy rating', 'sell rating',
+                'analyst', 'rating', 'outperform', 'underperform', 'overweight',
+                'target price', 'recommendation', 'coverage initiated'
+            ],
+            'regulatory_approval': [
+                'fda approval', 'drug approval', 'regulatory approval', 'cleared',
+                'authorized', 'approved', 'fda', 'regulatory', 'clinical trial'
+            ],
+            'product_innovation': [
+                'product launch', 'new product', 'innovation', 'breakthrough',
+                'patent', 'technology', 'development', 'launch'
+            ],
+            'partnership': [
+                'partnership', 'collaboration', 'joint venture', 'alliance',
+                'agreement', 'contract', 'strategic partnership', 'licensing'
+            ],
+            'guidance_outlook': [
+                'guidance', 'raised guidance', 'lowered guidance', 'outlook',
+                'forecast', 'projections', 'updated outlook', 'expects'
+            ],
+            'dividend_buyback': [
+                'dividend', 'buyback', 'share repurchase', 'dividend increase',
+                'dividend cut', 'special dividend', 'stock split', 'spin-off'
+            ],
+            'insider_activity': [
+                'insider', 'insider trading', 'insider buying', 'insider selling',
+                'executive', 'ceo', 'management', 'stock purchase', 'stock sale'
+            ],
+            'legal_regulatory': [
+                'lawsuit', 'settlement', 'investigation', 'fine', 'penalty',
+                'violation', 'court', 'ruling', 'sec', 'ftc', 'compliance'
+            ]
+        }
+        
+        best_match = ""
+        highest_score = 0
+        
+        for catalyst_type, keywords in catalyst_patterns.items():
+            score = 0
+            for keyword in keywords:
+                if keyword in content:
+                    if keyword in title.lower():
+                        score += 2
+                    else:
+                        score += 1
+            
+            if score > highest_score:
+                highest_score = score
+                best_match = catalyst_type
+        
+        return best_match if highest_score > 0 else ""
     
     def _deduplicate_articles(self, articles: List[NewsArticle]) -> List[NewsArticle]:
         """Remove duplicate articles based on title similarity"""
