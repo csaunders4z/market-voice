@@ -16,7 +16,8 @@
 
 ### Testing & Automation
 - [ ] Analyze and fix any remaining slow or flaky tests
-- [ ] Use CI/CD for linting, testing, and deployment (optional for solo dev, but recommended)
+- [ ] Add test to detect news collection failure: When multiple stocks (>3 out of top 10 movers) have empty news_articles arrays or only fallback news summaries, flag as news collection system failure requiring investigation
+- [ ] Use CI/CD for linting, testing, and deployment(optional for solo dev, but recommended)
 
 ### Deployment & Monitoring
 - [ ] Monitor logs and outputs for errors or regressions
