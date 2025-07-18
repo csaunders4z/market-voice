@@ -10,7 +10,7 @@
 
 ### News & Catalyst Enhancement
 - [x] **Integrate Finnhub news/sentiment in NewsCollector (phase 2)** - ✅ **COMPLETED**
-- [ ] Tune "today" logic for news (time zones, late-night/overnight articles)
+- [x] **Tune "today" logic for news (time zones, late-night/overnight articles)** - ✅ **COMPLETED (PR #17)**
 - [ ] Enhance catalyst detection (earnings, upgrades, M&A, etc.)
 - [ ] Add more news sources or robust fallback for low-news days
 
@@ -38,6 +38,15 @@
 ---
 
 ## Completed Tasks
+
+### News Timezone Handling ✅ **COMPLETED (PR #17)** - July 18, 2025
+- [x] Fixed timezone handling in news collection system to use US/Eastern consistently
+- [x] Updated API calls to use market timezone for date parameters instead of server time
+- [x] Fixed `_is_today_article()` methods across all news collectors to use market timezone
+- [x] Enhanced date parsing to handle timezone-naive dates by assuming UTC then converting to market timezone
+- [x] Ensured consistent "today" logic regardless of server timezone location
+- [x] Applied timezone fixes to: NewsCollector, StockNewsScraper, FreeNewsCollector, FinnhubNewsAdapter
+- [x] Addresses late-night/overnight article collection issues mentioned in plan
 
 ### Finnhub Integration Phase 2 ✅ **COMPLETED & MERGED (PR #14)** - July 16, 2025
 - [x] Implemented comprehensive news collection with sentiment analysis from Finnhub
