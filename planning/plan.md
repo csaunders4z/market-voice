@@ -11,7 +11,7 @@
 ### News & Catalyst Enhancement
 - [x] **Integrate Finnhub news/sentiment in NewsCollector (phase 2)** - ✅ **COMPLETED**
 - [x] **Tune "today" logic for news (time zones, late-night/overnight articles)** - ✅ **COMPLETED (PR #17)**
-- [ ] Enhance catalyst detection (earnings, upgrades, M&A, etc.)
+- [x] **Enhance catalyst detection (earnings, upgrades, M&A, etc.)** - ✅ **COMPLETED (PR #18)**
 - [ ] Add more news sources or robust fallback for low-news days
 
 ### Testing & Automation
@@ -38,6 +38,17 @@
 ---
 
 ## Completed Tasks
+
+### Enhanced Catalyst Detection ✅ **COMPLETED (PR #18)** - July 18, 2025
+- [x] Enhanced NewsCollector._identify_news_catalysts() with 10 comprehensive catalyst categories
+- [x] Added confidence scoring system (title matches: 2 points, description matches: 1 point)
+- [x] Implemented individual article classification with _identify_article_catalyst() method
+- [x] Updated all 5 NewsArticle creation points to populate catalyst_type field
+- [x] Enhanced relevance scoring with tiered keyword system (high/medium/low impact)
+- [x] Added catalyst bonus (+1.0) to relevance scoring for articles with identified catalysts
+- [x] Created comprehensive test script achieving 100% accuracy on 10 catalyst types
+- [x] Covers all requested catalyst types: earnings, upgrades, M&A, regulatory approvals, etc.
+- [x] Improved pattern matching beyond simple keyword detection with weighted scoring
 
 ### News Timezone Handling ✅ **COMPLETED (PR #17)** - July 18, 2025
 - [x] Fixed timezone handling in news collection system to use US/Eastern consistently

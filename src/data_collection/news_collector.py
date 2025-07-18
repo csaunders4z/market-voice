@@ -418,18 +418,64 @@ class NewsCollector:
         return " ".join(summary_parts)
     
     def _identify_news_catalysts(self, articles: List[Dict]) -> List[str]:
-        """Identify potential stock movement catalysts from news articles"""
+        """Identify potential stock movement catalysts from news articles with enhanced detection"""
         catalysts = []
         
-        # Catalyst keywords and patterns
+        # Enhanced catalyst keywords and patterns with more comprehensive coverage
         catalyst_patterns = {
-            'earnings': ['earnings', 'beat', 'miss', 'surprise', 'eps', 'revenue'],
-            'analyst_action': ['upgrade', 'downgrade', 'price target', 'rating', 'analyst'],
-            'product_news': ['launch', 'product', 'innovation', 'breakthrough', 'patent'],
-            'partnership': ['partnership', 'deal', 'acquisition', 'merger', 'collaboration'],
-            'regulatory': ['approval', 'fda', 'regulatory', 'compliance', 'investigation'],
-            'guidance': ['guidance', 'forecast', 'outlook', 'projections', 'expects'],
-            'insider_trading': ['insider', 'ceo', 'executive', 'management', 'shares']
+            'earnings': [
+                'earnings', 'beat', 'miss', 'surprise', 'eps', 'revenue', 'quarterly results',
+                'earnings report', 'q1', 'q2', 'q3', 'q4', 'fiscal year', 'profit',
+                'earnings per share', 'revenue growth', 'earnings guidance', 'beat estimates',
+                'miss expectations', 'earnings call', 'financial results'
+            ],
+            'analyst_action': [
+                'upgrade', 'downgrade', 'price target', 'rating', 'analyst', 'buy rating',
+                'sell rating', 'hold rating', 'outperform', 'underperform', 'overweight',
+                'underweight', 'neutral', 'strong buy', 'strong sell', 'target price',
+                'consensus', 'recommendation', 'coverage initiated', 'coverage resumed'
+            ],
+            'merger_acquisition': [
+                'acquisition', 'merger', 'takeover', 'buyout', 'deal', 'acquired',
+                'merge', 'purchase', 'bid', 'offer', 'transaction', 'consolidation',
+                'strategic acquisition', 'hostile takeover', 'friendly merger',
+                'cash deal', 'stock deal', 'all-cash', 'all-stock'
+            ],
+            'partnership_collaboration': [
+                'partnership', 'collaboration', 'joint venture', 'alliance', 'agreement',
+                'contract', 'deal', 'cooperation', 'strategic partnership', 'licensing',
+                'distribution agreement', 'supply agreement', 'manufacturing agreement'
+            ],
+            'product_innovation': [
+                'launch', 'product', 'innovation', 'breakthrough', 'patent', 'new product',
+                'product launch', 'innovation', 'technology', 'development', 'research',
+                'clinical trial', 'study results', 'drug approval', 'device approval'
+            ],
+            'regulatory_legal': [
+                'approval', 'fda', 'regulatory', 'compliance', 'investigation', 'lawsuit',
+                'settlement', 'fine', 'penalty', 'violation', 'sec', 'ftc', 'doj',
+                'court', 'judge', 'ruling', 'decision', 'cleared', 'authorized'
+            ],
+            'guidance_outlook': [
+                'guidance', 'forecast', 'outlook', 'projections', 'expects', 'anticipates',
+                'raised guidance', 'lowered guidance', 'updated outlook', 'full year',
+                'next quarter', 'forward looking', 'estimates', 'targets'
+            ],
+            'insider_activity': [
+                'insider', 'ceo', 'executive', 'management', 'shares', 'insider trading',
+                'insider buying', 'insider selling', 'stock purchase', 'stock sale',
+                'executive compensation', 'board', 'director', 'officer'
+            ],
+            'dividend_buyback': [
+                'dividend', 'buyback', 'share repurchase', 'special dividend', 'dividend increase',
+                'dividend cut', 'dividend yield', 'payout', 'return to shareholders',
+                'capital allocation', 'stock split', 'spin-off'
+            ],
+            'financial_metrics': [
+                'debt', 'cash', 'liquidity', 'credit rating', 'debt reduction', 'refinancing',
+                'credit facility', 'loan', 'financing', 'capital raise', 'ipo', 'offering',
+                'secondary offering', 'convertible', 'bonds'
+            ]
         }
         
         for article in articles:
@@ -437,10 +483,24 @@ class NewsCollector:
             description = article.get('description', '').lower()
             content = f"{title} {description}"
             
+            catalyst_scores = {}
+            
             for catalyst_type, keywords in catalyst_patterns.items():
-                if any(keyword in content for keyword in keywords):
-                    if catalyst_type not in catalysts:
-                        catalysts.append(catalyst_type)
+                score = 0
+                for keyword in keywords:
+                    if keyword in content:
+                        if keyword in title:
+                            score += 2
+                        else:
+                            score += 1
+                
+                if score > 0:
+                    catalyst_scores[catalyst_type] = score
+            
+            # Add catalysts that meet minimum confidence threshold
+            for catalyst_type, score in catalyst_scores.items():
+                if score >= 1 and catalyst_type not in catalysts:
+                    catalysts.append(catalyst_type)
         
         return catalysts
     
@@ -1287,4 +1347,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector()                
+news_collector = NewsCollector()                                
