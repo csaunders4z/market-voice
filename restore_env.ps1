@@ -25,8 +25,11 @@ function Test-RealApiKeys {
         return $false
     }
     
-    # Check for actual API key values
+    # Check for DUMMY/test values
     $lines = Get-Content $EnvFile
+    $realKeyFound = $false
+    $hasApiKeys = $false
+    
     foreach ($line in $lines) {
         if ($line -match "^\s*#" -or $line -match "^\s*$") {
             continue
@@ -36,13 +39,17 @@ function Test-RealApiKeys {
             $key = $matches[1].Trim()
             $value = $matches[2].Trim()
             
-            if ($key -match "API_KEY$" -and $value -and $value -notmatch "^your_.*_here$") {
-                return $true
+            if ($key -match "API_KEY$" -and $value) {
+                $hasApiKeys = $true
+                if ($value -notmatch "^(DUMMY|TEST|PLACEHOLDER)\s*$" -and $value -notmatch "^your_.*_here$") {
+                    $realKeyFound = $true
+                    break
+                }
             }
         }
     }
     
-    return $false
+    return $realKeyFound
 }
 
 # Check if backup directory exists

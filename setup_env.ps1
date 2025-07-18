@@ -19,8 +19,11 @@ function Test-RealApiKeys {
         return $false
     }
     
-    # Check for actual API key values
+    # Check for DUMMY/test values
     $lines = Get-Content $EnvFile
+    $realKeyFound = $false
+    $hasApiKeys = $false
+    
     foreach ($line in $lines) {
         if ($line -match "^\s*#" -or $line -match "^\s*$") {
             continue  # Skip comments and empty lines
@@ -30,13 +33,18 @@ function Test-RealApiKeys {
             $key = $matches[1].Trim()
             $value = $matches[2].Trim()
             
-            if ($key -match "API_KEY$" -and $value -and $value -notmatch "^your_.*_here$") {
-                return $true
+            if ($key -match "API_KEY$" -and $value) {
+                $hasApiKeys = $true
+                # Check if this is a real key (not DUMMY/TEST/PLACEHOLDER)
+                if ($value -notmatch "^(DUMMY|TEST|PLACEHOLDER)\s*$" -and $value -notmatch "^your_.*_here$") {
+                    $realKeyFound = $true
+                    break
+                }
             }
         }
     }
     
-    return $false
+    return $realKeyFound
 }
 
 # Check if .env already exists
@@ -93,4 +101,4 @@ Write-Host "   - Keep your API keys secure" -ForegroundColor Yellow
 $openFile = Read-Host "`nOpen .env file in editor now? (y/n)"
 if ($openFile -eq "y" -or $openFile -eq "Y") {
     Start-Process ".env"
-}  
+}    

@@ -198,7 +198,30 @@ has_real_api_keys() {
         return 1  # Contains template placeholders
     fi
     
-    # Check if file has actual API key values (non-empty, non-placeholder)
+    # Check for DUMMY/test values that should not be treated as real keys
+    if grep -q "^[^#]*API_KEY.*=.*DUMMY\s*$\|^[^#]*API_KEY.*=.*TEST\s*$\|^[^#]*API_KEY.*=.*PLACEHOLDER\s*$" "$env_file"; then
+        local real_key_found=false
+        while IFS='=' read -r key value; do
+            [[ "$key" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "$key" ]] && continue
+            
+            if [[ "$key" =~ API_KEY$ ]] && [[ -n "$value" ]] && [[ "$value" != "your_"*"_here" ]]; then
+                # Check if this is a real key (not DUMMY/TEST/PLACEHOLDER)
+                if [[ "$value" != "DUMMY" && "$value" != "TEST" && "$value" != "PLACEHOLDER" && ! "$value" =~ ^[[:space:]]*DUMMY[[:space:]]*$ && ! "$value" =~ ^[[:space:]]*TEST[[:space:]]*$ ]]; then
+                    real_key_found=true
+                    break
+                fi
+            fi
+        done < "$env_file"
+        
+        if $real_key_found; then
+            return 0  # Has real API keys mixed with DUMMY values
+        else
+            return 1  # Only DUMMY/test values, treat as template
+        fi
+    fi
+    
+    # Check if file has actual API key values (non-empty, non-placeholder, non-DUMMY)
     local has_keys=false
     while IFS='=' read -r key value; do
         [[ "$key" =~ ^[[:space:]]*# ]] && continue
@@ -432,4 +455,4 @@ main() {
 }
 
 # Run main function
-main "$@"        
+main "$@"                
