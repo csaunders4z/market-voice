@@ -488,38 +488,54 @@ class UnifiedDataCollector:
                     if enhanced_news and enhanced_news.get('collection_success'):
                         company_analysis = enhanced_news.get('company_analysis', {})
                         
-                        # Attach news articles to each stock in winners and losers (today's articles only)
+                        # Attach news articles to each stock in winners and losers (recent articles only)
+                        stocks_with_news = 0
+                        total_articles_attached = 0
+                        
                         for stock in winners + losers:
                             symbol = stock.get('symbol', '')
                             if symbol in company_analysis:
-                                # Filter to today's articles only
+                                # Filter to recent articles (last 24 hours in market timezone)
                                 all_articles = company_analysis[symbol].get('articles', [])
-                                today_articles = [article for article in all_articles 
-                                                if article.get('published_at') and 
-                                                datetime.fromisoformat(article['published_at'].replace('Z', '+00:00')).date() == datetime.now().date()]
-                                stock['news_articles'] = today_articles[:5]  # Top 5 today's articles
-                                stock['news_analysis'] = company_analysis[symbol].get('analysis_text', '')
-                                stock['news_sources'] = company_analysis[symbol].get('sources', [])
+                                recent_articles = self._filter_recent_articles(all_articles)
+                                
+                                if recent_articles:
+                                    stock['news_articles'] = recent_articles[:5]  # Top 5 recent articles
+                                    stock['news_analysis'] = company_analysis[symbol].get('analysis_text', '')
+                                    stock['news_sources'] = company_analysis[symbol].get('sources', [])
+                                    stocks_with_news += 1
+                                    total_articles_attached += len(recent_articles)
+                                    logger.debug(f"  {symbol}: {len(recent_articles)} articles attached")
+                                else:
+                                    # Initialize empty arrays to avoid None values
+                                    stock['news_articles'] = []
+                                    stock['news_analysis'] = ''
+                                    stock['news_sources'] = []
+                                    logger.debug(f"  {symbol}: No recent articles found")
                             else:
                                 # Fallback: try to get basic news data
                                 try:
                                     basic_news = news_collector.get_market_news(symbols=[symbol])
                                     if symbol in basic_news.get('company_news', {}):
-                                        # Filter to today's articles only
+                                        # Filter to recent articles only
                                         all_articles = basic_news['company_news'][symbol]
-                                        today_articles = [article for article in all_articles 
-                                                        if article.get('published_at') and 
-                                                        datetime.fromisoformat(article['published_at'].replace('Z', '+00:00')).date() == datetime.now().date()]
-                                        stock['news_articles'] = today_articles[:3]  # Top 3 today's articles
+                                        recent_articles = self._filter_recent_articles(all_articles)
+                                        if recent_articles:
+                                            stock['news_articles'] = recent_articles[:3]  # Top 3 recent articles
+                                            stocks_with_news += 1
+                                            total_articles_attached += len(recent_articles)
+                                        else:
+                                            stock['news_articles'] = []
                                     else:
                                         stock['news_articles'] = []
-                                except:
+                                except Exception as e:
+                                    logger.debug(f"Fallback news collection failed for {symbol}: {e}")
                                     stock['news_articles'] = []
                                 
                                 stock['news_analysis'] = ''
                                 stock['news_sources'] = []
                         
-                        logger.info(f"Attached news articles to {len(winners + losers)} top movers")
+                        logger.info(f"News attachment complete: {stocks_with_news}/{len(winners + losers)} stocks have news, {total_articles_attached} total articles")
                     
                 except Exception as e:
                     logger.warning(f"Failed to get enhanced news analysis: {str(e)}")
@@ -687,5 +703,56 @@ class UnifiedDataCollector:
         return True, results, "Finnhub"
 
 
+    def _filter_recent_articles(self, articles: list) -> list:
+        """Filter articles to those published in the last 24 hours in market timezone"""
+        if not articles:
+            return []
+        
+        try:
+            import pytz
+            from datetime import datetime, timedelta
+            
+            # Get current time in market timezone (Eastern)
+            market_tz = pytz.timezone('US/Eastern')
+            market_now = datetime.now(market_tz)
+            cutoff_time = market_now - timedelta(hours=24)
+            
+            recent_articles = []
+            for article in articles:
+                if self._is_recent_article(article.get('published_at', ''), cutoff_time):
+                    recent_articles.append(article)
+            
+            logger.debug(f"Filtered {len(recent_articles)}/{len(articles)} articles as recent")
+            return recent_articles
+            
+        except Exception as e:
+            logger.error(f"Error filtering recent articles: {e}")
+            # Fallback to returning all articles
+            return articles
+    
+    def _is_recent_article(self, published_at: str, cutoff_time) -> bool:
+        """Check if article was published after the cutoff time"""
+        if not published_at:
+            return False
+        
+        try:
+            import pytz
+            from datetime import datetime
+            
+            if 'T' in published_at:
+                article_date = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+            else:
+                article_date = datetime.fromisoformat(published_at + 'T00:00:00+00:00')
+            
+            if article_date.tzinfo is None:
+                article_date = article_date.replace(tzinfo=pytz.UTC)
+            
+            return article_date >= cutoff_time
+            
+        except Exception as e:
+            logger.debug(f"Error parsing article date '{published_at}': {e}")
+            return False
+
+
 # Global instance
-unified_collector = UnifiedDataCollector() 
+unified_collector = UnifiedDataCollector()   

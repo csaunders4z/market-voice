@@ -8,6 +8,16 @@
 
 ## Active Tasks
 
+### News Analysis Integration Improvements - **HIGH PRIORITY** - July 18, 2025
+- [ ] Fix news attachment logic in unified_data_collector.py - ensure news_articles, news_analysis, and news_sources properly populate for top movers
+- [ ] Enhance script prompt integration in script_generator.py - modify prompt creation to better utilize attached news data
+- [ ] Improve catalyst detection and relevance scoring in news_collector.py - strengthen news relevance scoring and catalyst identification
+- [ ] Debug timezone issues in news date filtering - fix _is_today_article and _filter_today_articles methods
+- [ ] Add better error handling and fallback mechanisms in get_enhanced_market_news
+- [ ] Implement circuit breaker reset logic for news APIs
+- [ ] Add comprehensive logging for news attachment debugging
+- [ ] Create news collection failure detection test for production monitoring
+
 ### News & Catalyst Enhancement
 - [x] **Integrate Finnhub news/sentiment in NewsCollector (phase 2)** - ✅ **COMPLETED**
 - [x] **Tune "today" logic for news (time zones, late-night/overnight articles)** - ✅ **COMPLETED (PR #17)**
