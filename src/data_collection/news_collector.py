@@ -51,6 +51,18 @@ class NewsCollector:
         self._thenewsapi_consecutive_failures = 0
         self._thenewsapi_failure_threshold = 5  # configurable
         self._thenewsapi_disabled_for_session = False
+    
+    def reset_circuit_breakers(self):
+        """Reset all circuit breakers - call this periodically or on successful requests"""
+        self._newsapi_consecutive_failures = 0
+        self._newsapi_disabled_for_session = False
+        self._newsdata_consecutive_failures = 0
+        self._newsdata_disabled_for_session = False
+        self._biztoc_consecutive_failures = 0
+        self._biztoc_disabled_for_session = False
+        self._thenewsapi_consecutive_failures = 0
+        self._thenewsapi_disabled_for_session = False
+        logger.info("Circuit breakers reset")
 
     def _get_market_time_range(self, hours_back: int = 24) -> tuple[datetime, datetime]:
         """Get time range in market timezone for news collection"""
@@ -943,6 +955,32 @@ class NewsCollector:
         except Exception as e:
             logger.error(f"Error in enhanced news collection: {str(e)}")
             enhanced_news['error'] = str(e)
+            
+            try:
+                logger.info("Attempting fallback to basic news collection")
+                basic_news = self.get_market_news(symbols, stock_data)
+                if basic_news.get('collection_success'):
+                    company_news = basic_news.get('company_news', {})
+                    company_analysis = {}
+                    
+                    for symbol, articles in company_news.items():
+                        if articles:
+                            company_analysis[symbol] = {
+                                'articles': articles,
+                                'analysis': f"Basic news collection for {symbol}: {len(articles)} articles found",
+                                'article_count': len(articles),
+                                'word_count': len(' '.join([a.get('title', '') + ' ' + a.get('description', '') for a in articles]))
+                            }
+                    
+                    enhanced_news['company_analysis'] = company_analysis
+                    enhanced_news['collection_success'] = True
+                    enhanced_news['fallback_used'] = True
+                    logger.info(f"Fallback to basic news collection successful: {len(company_analysis)} companies")
+                else:
+                    logger.error("Fallback news collection also failed")
+                    
+            except Exception as fallback_error:
+                logger.error(f"Fallback news collection also failed: {str(fallback_error)}")
         
         return enhanced_news
     
@@ -1347,4 +1385,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector()                                
+news_collector = NewsCollector()                                                                                                                                

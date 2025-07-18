@@ -234,15 +234,38 @@ class ScriptGenerator:
             # Format news information for the prompt
             news_info = ""
             if news_articles:
-                news_info += f"   Recent News Articles:\n"
+                news_info += f"   Recent News Articles ({len(news_articles)} total):\n"
+                
+                catalysts = []
                 for j, article in enumerate(news_articles[:3], 1):  # Top 3 articles
                     title = article.get('title', '')
                     source = article.get('source', 'Unknown')
                     published_at = article.get('published_at', '')
                     news_info += f"   {j}. {title} ({source}) - {published_at}\n"
+                    
+                    if article.get('catalyst_type'):
+                        catalysts.append(article['catalyst_type'])
+                
+                if catalysts:
+                    unique_catalysts = list(set(catalysts))
+                    news_info += f"   Identified Catalysts: {', '.join(unique_catalysts)}\n"
             
             if news_analysis:
-                news_info += f"   News Analysis: {news_analysis[:300]}...\n"
+                analysis_text = news_analysis
+                if len(analysis_text) > 300:
+                    truncated = analysis_text[:300]
+                    last_period = truncated.rfind('.')
+                    if last_period > 200:  # Only truncate at sentence if reasonable length
+                        analysis_text = truncated[:last_period + 1]
+                    else:
+                        analysis_text = truncated + "..."
+                
+                news_info += f"   News Analysis: {analysis_text}\n"
+            elif news_articles:
+                # Generate a brief summary from article titles if no analysis available
+                titles = [article.get('title', '') for article in news_articles[:3] if article.get('title')]
+                if titles:
+                    news_info += f"   Key Headlines: {'; '.join(titles)}\n"
             
             winners_text += f"\n{i}. {symbol} ({company_name}): ${current_price} (+{percent_change:.2f}%)\n"
             winners_text += f"   Volume: {volume_ratio:.1f}x average\n"
@@ -286,15 +309,38 @@ class ScriptGenerator:
             # Format news information for the prompt
             news_info = ""
             if news_articles:
-                news_info += f"   Recent News Articles:\n"
+                news_info += f"   Recent News Articles ({len(news_articles)} total):\n"
+                
+                catalysts = []
                 for j, article in enumerate(news_articles[:3], 1):  # Top 3 articles
                     title = article.get('title', '')
                     source = article.get('source', 'Unknown')
                     published_at = article.get('published_at', '')
                     news_info += f"   {j}. {title} ({source}) - {published_at}\n"
+                    
+                    if article.get('catalyst_type'):
+                        catalysts.append(article['catalyst_type'])
+                
+                if catalysts:
+                    unique_catalysts = list(set(catalysts))
+                    news_info += f"   Identified Catalysts: {', '.join(unique_catalysts)}\n"
             
             if news_analysis:
-                news_info += f"   News Analysis: {news_analysis[:300]}...\n"
+                analysis_text = news_analysis
+                if len(analysis_text) > 300:
+                    truncated = analysis_text[:300]
+                    last_period = truncated.rfind('.')
+                    if last_period > 200:  # Only truncate at sentence if reasonable length
+                        analysis_text = truncated[:last_period + 1]
+                    else:
+                        analysis_text = truncated + "..."
+                
+                news_info += f"   News Analysis: {analysis_text}\n"
+            elif news_articles:
+                # Generate a brief summary from article titles if no analysis available
+                titles = [article.get('title', '') for article in news_articles[:3] if article.get('title')]
+                if titles:
+                    news_info += f"   Key Headlines: {'; '.join(titles)}\n"
             
             losers_text += f"\n{i}. {symbol} ({company_name}): ${current_price} ({percent_change:.2f}%)\n"
             losers_text += f"   Volume: {volume_ratio:.1f}x average\n"
