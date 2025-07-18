@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import logging
 logger = logging.getLogger(__name__)
 import os
+import pytz
 
 from src.config.settings import get_settings
 
@@ -33,6 +34,7 @@ class NewsCollector:
         self.rapidapi_key = os.getenv("BIZTOC_API_KEY", "")
         self.rapidapi_host = "biztoc.p.rapidapi.com"
         self.newsdata_api_key = self.settings.newsdata_io_api_key
+        self.market_tz = pytz.timezone('US/Eastern')
         # Global circuit breaker/session disable for NewsAPI
         self._newsapi_consecutive_failures = 0
         self._newsapi_failure_threshold = 5  # configurable
@@ -50,6 +52,11 @@ class NewsCollector:
         self._thenewsapi_failure_threshold = 5  # configurable
         self._thenewsapi_disabled_for_session = False
 
+    def _get_market_time_range(self, hours_back: int = 24) -> tuple[datetime, datetime]:
+        """Get time range in market timezone for news collection"""
+        market_now = datetime.now(self.market_tz)
+        from_time = market_now - timedelta(hours=hours_back)
+        return from_time, market_now
         
     def get_newsapi_news(self, query: str = "NASDAQ", hours_back: int = 24) -> List[Dict]:
         """Get news from NewsAPI with global circuit breaker/session disable logic"""
@@ -62,9 +69,11 @@ class NewsCollector:
             
         try:
             url = "https://newsapi.org/v2/everything"
+            market_now = datetime.now(self.market_tz)
+            from_time = market_now - timedelta(hours=hours_back)
             params = {
                 'q': query,
-                'from': (datetime.now() - timedelta(hours=hours_back)).isoformat(),
+                'from': from_time.isoformat(),
                 'sortBy': 'publishedAt',
                 'language': 'en',
                 'apiKey': self.the_news_api_api_key
@@ -1229,7 +1238,7 @@ class NewsCollector:
             return []
     
     def _is_today_article(self, published_at: str) -> bool:
-        """Check if article was published today"""
+        """Check if article was published today (in market timezone)"""
         if not published_at:
             return False
         
@@ -1241,15 +1250,22 @@ class NewsCollector:
             elif ' ' in published_at:
                 # Common format: "2024-01-15 10:30:00"
                 article_date = datetime.strptime(published_at, '%Y-%m-%d %H:%M:%S')
+                article_date = article_date.replace(tzinfo=pytz.UTC)
             else:
                 # Date only: "2024-01-15"
                 article_date = datetime.strptime(published_at, '%Y-%m-%d')
+                article_date = article_date.replace(tzinfo=pytz.UTC)
             
-            # Get today's date (start of day)
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            if article_date.tzinfo is None:
+                article_date = article_date.replace(tzinfo=pytz.UTC)
+            article_date_market = article_date.astimezone(self.market_tz)
             
-            # Check if article is from today
-            return article_date.date() == today.date()
+            # Get today's date in market timezone (start of day)
+            market_now = datetime.now(self.market_tz)
+            today_market = market_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Check if article is from today in market timezone
+            return article_date_market.date() == today_market.date()
             
         except Exception as e:
             logger.debug(f"Error parsing date '{published_at}': {str(e)}")
@@ -1271,4 +1287,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector()        
+news_collector = NewsCollector()                
