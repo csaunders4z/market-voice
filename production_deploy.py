@@ -35,6 +35,39 @@ def create_production_directories():
     
     return True
 
+def has_real_api_keys(env_file):
+    """Check if .env file contains real API keys (not template placeholders or test values)"""
+    if not Path(env_file).exists():
+        return False
+    
+    with open(env_file, 'r') as f:
+        content = f.read()
+    
+    if any(placeholder in content for placeholder in [
+        "your_", "_api_key_here", "_key_here", "INSERT_", "REPLACE_"
+    ]):
+        return False
+    
+    lines = content.strip().split('\n')
+    real_key_found = False
+    
+    for line in lines:
+        line = line.strip()
+        if line.startswith('#') or not line:
+            continue
+        
+        if '=' in line:
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+            
+            if key.endswith('API_KEY') and value:
+                if value not in ['DUMMY', 'TEST', 'PLACEHOLDER'] and not value.startswith('your_'):
+                    real_key_found = True
+                    break
+    
+    return real_key_found
+
 def deploy_configuration():
     """Deploy configuration files to production"""
     print("Deploying configuration files...")
@@ -42,6 +75,15 @@ def deploy_configuration():
     if not Path(".env").exists():
         print("❌ .env file not found. Copy env.template to .env and configure API keys.")
         return False
+    
+    if has_real_api_keys(".env"):
+        print("✅ .env file contains real API keys - proceeding with deployment")
+    else:
+        print("⚠️  .env file appears to contain template/dummy values")
+        response = input("Continue with deployment anyway? (yes/no): ")
+        if response.lower() != 'yes':
+            print("❌ Deployment cancelled")
+            return False
     
     try:
         shutil.copy2(".env", "/etc/market-voices/.env")
