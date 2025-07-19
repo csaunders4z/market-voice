@@ -97,6 +97,13 @@ class Settings(BaseSettings):
     biztoc_rate_limit_delay: float = Field(default=1.0, env="BIZTOC_RATE_LIMIT_DELAY")  # Seconds between Biztoc calls
     biztoc_batch_delay: float = Field(default=2.0, env="BIZTOC_BATCH_DELAY")  # Delay between batches
     
+    # Finnhub API Rate Limiting
+    finnhub_rate_limit_delay: float = Field(default=0.5, env="FINNHUB_RATE_LIMIT_DELAY")  # Seconds between Finnhub calls
+    finnhub_batch_size: int = Field(default=10, env="FINNHUB_BATCH_SIZE")  # Symbols per batch
+    finnhub_batch_delay: float = Field(default=2.0, env="FINNHUB_BATCH_DELAY")  # Delay between batches
+    finnhub_max_retries: int = Field(default=3, env="FINNHUB_MAX_RETRIES")  # Max retries per symbol
+    finnhub_failure_threshold: int = Field(default=10, env="FINNHUB_FAILURE_THRESHOLD")  # Failures before circuit breaker
+    
     # Collection Limits
     max_symbols_per_collection: int = Field(default=200, env="MAX_SYMBOLS_PER_COLLECTION")  # Max symbols to collect (increased for expanded coverage)
     collection_timeout_minutes: int = Field(default=15, env="COLLECTION_TIMEOUT_MINUTES")  # Max collection time (increased for larger datasets)
@@ -133,4 +140,4 @@ def get_finnhub_api_key():
     return os.getenv("FINNHUB_API_KEY", "")
 
 def get_alpha_vantage_api_key():
-    return os.getenv("ALPHA_VANTAGE_API_KEY", "")                
+    return os.getenv("ALPHA_VANTAGE_API_KEY", "")                        
