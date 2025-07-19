@@ -31,6 +31,7 @@ class NewsCollector:
     def __init__(self):
         self.settings = get_settings()
         self.the_news_api_api_key = self.settings.the_news_api_api_key
+        self.newsapi_api_key = self.settings.newsapi_api_key
         self.rapidapi_key = os.getenv("BIZTOC_API_KEY", "")
         self.rapidapi_host = "biztoc.p.rapidapi.com"
         self.newsdata_api_key = self.settings.newsdata_io_api_key
@@ -75,7 +76,7 @@ class NewsCollector:
         if self._newsapi_disabled_for_session:
             logger.error(f"NewsAPI disabled for this session after {self._newsapi_failure_threshold} consecutive failures. Skipping all NewsAPI requests.")
             return []
-        if self.the_news_api_api_key == "DUMMY": 
+        if self.newsapi_api_key == "DUMMY" or not self.newsapi_api_key: 
             logger.info("Using dummy news data for test mode")
             return self._get_dummy_news()
             
@@ -88,7 +89,7 @@ class NewsCollector:
                 'from': from_time.isoformat(),
                 'sortBy': 'publishedAt',
                 'language': 'en',
-                'apiKey': self.the_news_api_api_key
+                'apiKey': self.newsapi_api_key
             }
             
             response = requests.get(url, params=params, timeout=15)
@@ -1385,4 +1386,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector()                                                                                                                                
+news_collector = NewsCollector()                                                                                                                                                                                                                                                                

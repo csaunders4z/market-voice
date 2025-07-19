@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     finnhub_api_key: str = Field(default="", env="FINNHUB_API_KEY")
     fmp_api_key: str = Field(default="", env="FMP_API_KEY")
     newsdata_io_api_key: str = Field(default="", env="NEWSDATA_IO_API_KEY")
+    newsapi_api_key: str = Field(default="", env="NEWSAPI_API_KEY")
     data_source_priority: str = Field(default="fmp,yahoo,alpha_vantage", env="DATA_SOURCE_PRIORITY")
     max_retries: int = Field(default=3, env="MAX_RETRIES")
     
@@ -128,4 +129,4 @@ def get_finnhub_api_key():
     return os.getenv("FINNHUB_API_KEY", "")
 
 def get_alpha_vantage_api_key():
-    return os.getenv("ALPHA_VANTAGE_API_KEY", "")    
+    return os.getenv("ALPHA_VANTAGE_API_KEY", "")        

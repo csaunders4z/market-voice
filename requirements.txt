@@ -14,6 +14,7 @@ openai
 # Optional: for free news scraping (if used)
 beautifulsoup4
 lxml
+feedparser
 # For type checking and linting
 mypy
 pyright
