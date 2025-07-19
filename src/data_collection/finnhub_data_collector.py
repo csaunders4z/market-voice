@@ -5,7 +5,7 @@ Provides market data, fundamentals, and news endpoints with global circuit break
 import os
 import time
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 from loguru import logger
 import requests
 
@@ -20,6 +20,7 @@ class FinnhubDataCollector:
         self._finnhub_failure_threshold = 5  # configurable
         self._finnhub_disabled_for_session = False
         self.base_url = "https://finnhub.io/api/v1"
+        self.news_days_back = 4  # configurable days back for news collection
 
     def _check_disabled(self) -> bool:
         if self._finnhub_disabled_for_session:
@@ -92,17 +93,18 @@ class FinnhubDataCollector:
             logger.error(f"Finnhub profile fetch failed for {symbol}: {str(e)}")
             return None
 
-    def get_news(self, symbol: str, from_date: str = None, to_date: str = None) -> List[Dict]:
+    def get_news(self, symbol: str, from_date: Optional[str] = None, to_date: Optional[str] = None) -> List[Dict]:
         """Get company-specific news from Finnhub."""
         if self._check_disabled():
             return []
         try:
+            if not from_date:
+                from_date = (datetime.now() - timedelta(days=self.news_days_back)).strftime('%Y-%m-%d')
+            if not to_date:
+                to_date = datetime.now().strftime('%Y-%m-%d')
+                
             url = f"{self.base_url}/company-news"
-            params = {"symbol": symbol, "token": self.api_key}
-            if from_date:
-                params["from"] = from_date
-            if to_date:
-                params["to"] = to_date
+            params = {"symbol": symbol, "from": from_date, "to": to_date, "token": self.api_key}
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
