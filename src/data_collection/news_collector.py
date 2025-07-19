@@ -135,7 +135,7 @@ class NewsCollector:
             logger.error(f"Error fetching NewsAPI data: {str(e)}")
             return []
     
-    def get_biztoc_news(self, query: str = "NASDAQ", hours_back: int = 24, company: str = None) -> List[Dict]:
+    def get_biztoc_news(self, query: str = "NASDAQ", hours_back: int = 24, company: Optional[str] = None) -> List[Dict]:
         """Get business news from Biztoc via RapidAPI with enhanced content and company support"""
         if not self.rapidapi_key or self.rapidapi_key == "DUMMY":
             logger.info("No Biztoc API key provided, skipping Biztoc news")
@@ -200,7 +200,7 @@ class NewsCollector:
             logger.error(f"Error fetching Biztoc data: {str(e)}")
             return []
     
-    def get_newsdata_news(self, query: str = "NASDAQ", hours_back: int = 24, company: str = None) -> List[Dict]:
+    def get_newsdata_news(self, query: str = "NASDAQ", hours_back: int = 24, company: Optional[str] = None) -> List[Dict]:
         """Get news from NewsData.io with enhanced content and company support, with global circuit breaker/session disable logic"""
         if self._newsdata_disabled_for_session:
             logger.error(f"NewsData.io disabled for this session after {self._newsdata_failure_threshold} consecutive failures. Skipping all NewsData.io requests.")
@@ -252,7 +252,7 @@ class NewsCollector:
             logger.error(f"Error fetching NewsData.io data: {str(e)}")
             return []
     
-    def get_the_news_api_news(self, query: str = "NASDAQ", hours_back: int = 24, company: str = None) -> List[Dict]:
+    def get_the_news_api_news(self, query: str = "NASDAQ", hours_back: int = 24, company: Optional[str] = None) -> List[Dict]:
         """Get news from The News API with enhanced content and company support"""
         if not self.the_news_api_api_key or self.the_news_api_api_key == "DUMMY":
             logger.info("No The News API key provided, skipping The News API news")
@@ -351,6 +351,8 @@ class NewsCollector:
             self._biztoc_consecutive_failures += 1
             if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
                 self._biztoc_disabled_for_session = True
+            logger.error(f"Biztoc search failed: {str(e)}")
+            return []
 
     def _get_biztoc_market_news(self, limit: int = 5) -> List[Dict]:
         """Get market-specific news from Biztoc"""
@@ -390,9 +392,91 @@ class NewsCollector:
         finally:
             logger.info("[MARKET] Exit: _get_biztoc_market_news")
             print("[MARKET] Exit: _get_biztoc_market_news")
-                
 
-    
+    def _get_biztoc_trending(self, limit: int = 5) -> List[Dict]:
+        """Get trending business news from Biztoc"""
+        logger.info("[TRENDING] Entry: _get_biztoc_trending")
+        if self._biztoc_disabled_for_session:
+            logger.error(f"[TRENDING] Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
+            print("[TRENDING] Biztoc API disabled for this session. Skipping request.")
+            return []
+        try:
+            url = f"https://{self.rapidapi_host}/trending"
+            headers = {
+                "X-RapidAPI-Key": self.rapidapi_key,
+                "X-RapidAPI-Host": self.rapidapi_host
+            }
+            params = {
+                "limit": str(limit)
+            }
+            logger.info(f"[TRENDING] About to call Biztoc API: {url} with headers: {headers} and params: {params}")
+            print(f"[TRENDING] About to call Biztoc API: {url} with headers: {headers} and params: {params}")
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            logger.info(f"[TRENDING] Biztoc API {url} status: {response.status_code}")
+            logger.info(f"[TRENDING] Biztoc API {url} response: {response.text}")
+            print(f"[TRENDING] Biztoc API {url} status: {response.status_code}")
+            print(f"[TRENDING] Biztoc API {url} response: {response.text}")
+            response.raise_for_status()
+
+            data = response.json()
+            if isinstance(data, dict):
+                return data.get('articles', [])
+            elif isinstance(data, list):
+                return data
+            return []
+        except Exception as e:
+            logger.error(f"[TRENDING] Biztoc trending news failed: {str(e)}")
+            print(f"[TRENDING] Biztoc trending news failed: {str(e)}")
+            self._biztoc_consecutive_failures += 1
+            if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
+                self._biztoc_disabled_for_session = True
+            return []
+        finally:
+            logger.info("[TRENDING] Exit: _get_biztoc_trending")
+            print("[TRENDING] Exit: _get_biztoc_trending")
+
+    def _get_biztoc_company_news(self, company: str, limit: int = 5) -> List[Dict]:
+        """Get company-specific news from Biztoc"""
+        logger.info(f"[COMPANY] Entry: _get_biztoc_company_news for {company}")
+        if self._biztoc_disabled_for_session:
+            logger.error(f"[COMPANY] Biztoc API disabled for this session after {self._biztoc_failure_threshold} consecutive failures. Skipping all Biztoc requests.")
+            print("[COMPANY] Biztoc API disabled for this session. Skipping request.")
+            return []
+        try:
+            url = f"https://{self.rapidapi_host}/company"
+            headers = {
+                "X-RapidAPI-Key": self.rapidapi_key,
+                "X-RapidAPI-Host": self.rapidapi_host
+            }
+            params = {
+                "q": company,
+                "limit": str(limit)
+            }
+            logger.info(f"[COMPANY] About to call Biztoc API: {url} with headers: {headers} and params: {params}")
+            print(f"[COMPANY] About to call Biztoc API: {url} with headers: {headers} and params: {params}")
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            logger.info(f"[COMPANY] Biztoc API {url} status: {response.status_code}")
+            logger.info(f"[COMPANY] Biztoc API {url} response: {response.text}")
+            print(f"[COMPANY] Biztoc API {url} status: {response.status_code}")
+            print(f"[COMPANY] Biztoc API {url} response: {response.text}")
+            response.raise_for_status()
+
+            data = response.json()
+            if isinstance(data, dict):
+                return data.get('articles', [])
+            elif isinstance(data, list):
+                return data
+            return []
+        except Exception as e:
+            logger.error(f"[COMPANY] Biztoc company news failed for {company}: {str(e)}")
+            print(f"[COMPANY] Biztoc company news failed for {company}: {str(e)}")
+            self._biztoc_consecutive_failures += 1
+            if self._biztoc_consecutive_failures >= self._biztoc_failure_threshold:
+                self._biztoc_disabled_for_session = True
+            return []
+        finally:
+            logger.info(f"[COMPANY] Exit: _get_biztoc_company_news for {company}")
+            print(f"[COMPANY] Exit: _get_biztoc_company_news for {company}")
     def _create_news_summary(self, articles: List[Dict], symbol: str) -> str:
         """Create a comprehensive news summary from multiple articles"""
         if not articles:
@@ -517,7 +601,7 @@ class NewsCollector:
         
         return catalysts
     
-    def get_market_news(self, symbols: List[str] = None, stock_data: List[Dict] = None) -> Dict:
+    def get_market_news(self, symbols: Optional[List[str]] = None, stock_data: Optional[List[Dict]] = None) -> Dict:
         """Get comprehensive market news for the day with enhanced company integration"""
         logger.info("Starting market news collection")
         
@@ -837,7 +921,7 @@ class NewsCollector:
             else:
                 return f"{company_name} ({symbol}) declined {abs(percent_change):.2f}% today amid broader market selling pressure. The stock was impacted by negative market sentiment and sector rotation, with investors taking profits in growth stocks and moving toward value plays. Technical indicators suggest the stock may find support at current levels."
     
-    def get_comprehensive_analysis(self, symbol: str = None, market_topic: str = "NASDAQ") -> Dict:
+    def get_comprehensive_analysis(self, symbol: Optional[str] = None, market_topic: str = "NASDAQ") -> Dict:
         """Get comprehensive analysis by combining multiple articles and sources"""
         try:
             # Get articles from multiple sources
@@ -913,7 +997,7 @@ class NewsCollector:
                 'error': str(e)
             }
     
-    def get_enhanced_market_news(self, symbols: List[str] = None, stock_data: List[Dict] = None) -> Dict:
+    def get_enhanced_market_news(self, symbols: Optional[List[str]] = None, stock_data: Optional[List[Dict]] = None) -> Dict:
         """Get enhanced market news with comprehensive analysis"""
         logger.info("Starting enhanced market news collection")
         
@@ -1386,4 +1470,4 @@ class NewsCollector:
 
 
 # Global instance
-news_collector = NewsCollector()                                                                                                                                                                                                                                                                
+news_collector = NewsCollector()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
