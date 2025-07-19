@@ -49,35 +49,15 @@ function Test-RealApiKeys {
 
 # Check if .env already exists
 if (Test-Path ".env") {
-    if (Test-RealApiKeys ".env") {
-        Write-Host "🚨 CRITICAL: .env file contains real API keys!" -ForegroundColor Red
-        Write-Host "This operation will overwrite your existing API keys." -ForegroundColor Red
-        Write-Host ""
-        
-        $backup = Read-Host "Create backup before proceeding? (STRONGLY RECOMMENDED) (y/n)"
-        if ($backup -eq "y" -or $backup -eq "Y") {
-            & ".\backup_env.ps1"
-            Write-Host "✅ Backup created" -ForegroundColor Green
-        } else {
-            Write-Host "⚠️  No backup created - your API keys will be lost!" -ForegroundColor Yellow
-        }
-        
-        Write-Host ""
-        $confirm = Read-Host "Are you SURE you want to overwrite .env with template? (yes/no)"
-        if ($confirm -ne "yes") {
-            Write-Host "❌ Operation cancelled to protect your API keys" -ForegroundColor Red
-            exit 1
-        }
-    } else {
-        Write-Host "⚠️  .env file already exists (contains template content)" -ForegroundColor Yellow
-        $backup = Read-Host "Do you want to create a backup first? (y/n)"
-        if ($backup -eq "y" -or $backup -eq "Y") {
-            & ".\backup_env.ps1"
-        }
-    }
+    Write-Host "✅ .env file already exists - preserving existing configuration" -ForegroundColor Green
+    Write-Host "   If you need to reset your .env file, please:" -ForegroundColor Yellow
+    Write-Host "   1. Run backup_env.ps1 to create a backup" -ForegroundColor Yellow
+    Write-Host "   2. Manually delete .env file" -ForegroundColor Yellow
+    Write-Host "   3. Run this script again to create from template" -ForegroundColor Yellow
+    exit 0
 }
 
-# Create .env from template
+# Create .env from template only if it doesn't exist
 if (Test-Path "env.template") {
     Copy-Item "env.template" ".env"
     Write-Host "✅ Created .env from template" -ForegroundColor Green
@@ -101,4 +81,4 @@ Write-Host "   - Keep your API keys secure" -ForegroundColor Yellow
 $openFile = Read-Host "`nOpen .env file in editor now? (y/n)"
 if ($openFile -eq "y" -or $openFile -eq "Y") {
     Start-Process ".env"
-}    
+}                        

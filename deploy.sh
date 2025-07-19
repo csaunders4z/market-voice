@@ -283,8 +283,10 @@ configure_environment() {
         read -r
     fi
     
-    # Create environment file template
-    sudo -u "$USER_NAME" tee "$ENV_FILE" > /dev/null <<EOF
+    # Check if .env file exists, if not create a template
+    if [[ ! -f "$ENV_FILE" ]]; then
+        warning "No .env file found. Creating template at $ENV_FILE"
+        sudo -u "$USER_NAME" tee "$ENV_FILE" > /dev/null <<EOF
 # Market Voices Production Configuration
 # Update these values with your actual API keys
 
@@ -313,8 +315,10 @@ LOG_LEVEL=INFO
 DATABASE_URL=sqlite:///market_voices.db
 OUTPUT_DIRECTORY=output
 EOF
-    
-    warning "Please update the environment file at $ENV_FILE with your actual API keys"
+        warning "Please update the environment file at $ENV_FILE with your actual API keys"
+    else
+        success "Using existing .env file at $ENV_FILE"
+    fi
     
     # Check if we created backups and remind user
     if [[ -d "$BACKUP_DIR" ]] && [[ "$(ls -A $BACKUP_DIR 2>/dev/null)" ]]; then
@@ -455,4 +459,4 @@ main() {
 }
 
 # Run main function
-main "$@"                
+main "$@"                                
