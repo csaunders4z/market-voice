@@ -2,10 +2,10 @@
 
 ## 🚨 Immediate Action Items (From Production Validation)
 
-### 1. Fix API Authentication Issues
-- [ ] **NewsAPI 401 Errors**: Code incorrectly uses `the_news_api_api_key` for newsapi.org requests, should use `NEWSAPI_API_KEY`
-- [ ] Add missing `newsapi_api_key` field to Settings class
-- [ ] Update news_collector.py to use correct API key for each service
+### 1. Fix API Authentication Issues ✅ COMPLETED
+- [x] **NewsAPI 401 Errors**: Code incorrectly uses `the_news_api_api_key` for newsapi.org requests, should use `NEWSAPI_API_KEY`
+- [x] Add missing `newsapi_api_key` field to Settings class
+- [x] Update news_collector.py to use correct API key for each service
 
 ### 2. Address Rate Limiting Problems  
 - [ ] **Finnhub API**: Implement exponential backoff, currently hits rate limits after 5 requests
@@ -14,7 +14,7 @@
 
 ### 3. Resolve System Architecture Issues
 - [ ] **Circular Import**: Fix "cannot import name 'news_collector'" initialization issue
-- [ ] **Missing Dependency**: Add `feedparser` to requirements.txt
+- [x] **Missing Dependency**: Add `feedparser` to requirements.txt ✅ COMPLETED
 - [ ] Update module imports to prevent circular dependencies
 
 ### 4. Improve Data Collection Coverage
@@ -55,8 +55,9 @@
 - **Cost Tracking**: Functional ($7.85/month estimate)
 
 ## 📋 Next Steps
-1. **PRIORITY 1**: Fix NewsAPI authentication (in progress)
-2. **PRIORITY 2**: Add missing dependencies to requirements.txt
-3. **PRIORITY 3**: Implement rate limiting improvements
-4. **PRIORITY 4**: Address circular import issues
-5. **PRIORITY 5**: Improve data collection coverage
+1. **PRIORITY 1**: Fix NewsAPI authentication ✅ COMPLETED
+2. **PRIORITY 2**: Add missing dependencies to requirements.txt ✅ COMPLETED
+3. **PRIORITY 3**: Fix Biztoc API missing methods (AttributeError for _get_biztoc_trending, _get_biztoc_company_news) ✅ COMPLETED
+4. **PRIORITY 4**: Implement rate limiting improvements
+5. **PRIORITY 5**: Address circular import issues
+6. **PRIORITY 6**: Improve data collection coverage
