@@ -34,7 +34,7 @@ class NewsCollector:
         self.newsapi_api_key = self.settings.newsapi_api_key
         self.rapidapi_key = os.getenv("BIZTOC_API_KEY", "")
         self.rapidapi_host = "biztoc.p.rapidapi.com"
-        self.newsdata_api_key = self.settings.newsdata_io_api_key
+        self.newsdata_io_api_key = self.settings.newsdata_io_api_key
         self.market_tz = pytz.timezone('US/Eastern')
         # Global circuit breaker/session disable for NewsAPI
         self._newsapi_consecutive_failures = 0
@@ -184,8 +184,9 @@ class NewsCollector:
                         'full_text': full_text,
                         'url': article.get('url', ''),
                         'source': article.get('source', ''),
-                        'author': article.get('author', ''),
-                        'published_at': article.get('published_at', ''),
+                        'author': '',  # The News API doesn't provide author
+                        'published_at': published_at,
+                        'category': categories,
                         'relevance_score': self._calculate_relevance_score(article, query),
                         'word_count': len(full_text.split()) if full_text else 0
                     })
@@ -229,7 +230,6 @@ class NewsCollector:
             for article in unique_articles.values():
                 title = article.get('title', '')
                 description = article.get('description', '')
-                content = article.get('content', '')
                 full_text = f"{description}\n{content}" if content else description
                 processed_articles.append({
                     'title': title,
@@ -237,7 +237,7 @@ class NewsCollector:
                     'content': content,
                     'url': article.get('url', ''),
                     'source': article.get('source', ''),
-                    'published_at': article.get('pubDate', ''),
+                    'published_at': published_at,
                     'word_count': len(full_text.split()) if full_text else 0
                 })
 
@@ -287,21 +287,15 @@ class NewsCollector:
                     snippet = article.get('snippet', '')
                     
                     # Combine available text
-                    full_text = f"{description} {snippet}".strip()
-                    
-                    # Get additional metadata
-                    source_name = article.get('source', '')
-                    url = article.get('url', '')
-                    published_at = article.get('published_at', '')
-                    categories = article.get('categories', [])
+                    full_text = f"{description}\n{snippet}".strip()
                     
                     processed_articles.append({
                         'title': title,
                         'description': description,
                         'content': snippet,
                         'full_text': full_text,
-                        'url': url,
-                        'source': source_name,
+                        'url': article.get('url', ''),
+                        'source': article.get('source', ''),
                         'author': '',  # The News API doesn't provide author
                         'published_at': published_at,
                         'category': categories,
@@ -501,16 +495,17 @@ class NewsCollector:
         if source:
             summary_parts.append(f"(Source: {source})")
         
-        # Add additional context from other articles
+        # Add additional context from other sources
         if len(articles) > 1:
             additional_sources = set()
-            for article in articles[1:3]:  # Next 2 articles
+            for article in articles[1:4]:  # Next 3 articles
                 article_source = article.get('source', '')
                 if article_source and article_source != source:
                     additional_sources.add(article_source)
-            
+                
             if additional_sources:
-                summary_parts.append(f"Additional coverage: {', '.join(list(additional_sources)[:2])}")
+                sources_text = ", ".join(list(additional_sources)[:2])
+                summary_parts.append(f"Additional coverage from {sources_text}")
         
         return " ".join(summary_parts)
     
@@ -586,10 +581,7 @@ class NewsCollector:
                 score = 0
                 for keyword in keywords:
                     if keyword in content:
-                        if keyword in title:
-                            score += 2
-                        else:
-                            score += 1
+                        score += 1
                 
                 if score > 0:
                     catalyst_scores[catalyst_type] = score
@@ -633,8 +625,9 @@ class NewsCollector:
             all_news['market_news'] = sorted_news[:15]  # Top 15 most relevant
             
             # Get company-specific news for top movers
-            if symbols:
-                for symbol in symbols[:5]:  # Top 5 symbols
+            if stock_data:
+                for stock in stock_data[:5]:  # Top 5 stocks
+                    symbol = stock.get('symbol', '')
                     company_news = self.get_newsapi_news(symbol, 48)
                     if company_news:
                         all_news['company_news'][symbol] = company_news[:3]  # Top 3 per company
@@ -717,209 +710,10 @@ class NewsCollector:
         
         # Check for query terms in title and description
         for term in query_terms:
-            if term in title:
-                score += 2.0
-            if term in description:
-                score += 1.0
-        
-        # Bonus for financial keywords
-        financial_keywords = ['earnings', 'revenue', 'profit', 'stock', 'market', 'trading', 'investor']
-        for keyword in financial_keywords:
-            if keyword in title or keyword in description:
-                score += 0.5
+            if term in title or term in description:
+                score += 1
         
         return score
-    
-    def _deduplicate_news(self, news_list: List[Dict]) -> List[Dict]:
-        """Remove duplicate news articles based on title similarity"""
-        seen_titles = set()
-        unique_news = []
-        
-        for article in news_list:
-            title = article.get('title', '').lower()
-            # Simple deduplication - could be improved with fuzzy matching
-            if title not in seen_titles:
-                seen_titles.add(title)
-                unique_news.append(article)
-        
-        return unique_news
-    
-    def _get_dummy_news(self) -> List[Dict]:
-        """Generate dummy news for test mode"""
-        return [
-            {
-                'title': 'NASDAQ-100 Shows Strong Performance Amid Tech Rally',
-                'description': 'Technology stocks led the market higher as investors remain optimistic about AI and cloud computing growth.',
-                'url': 'https://example.com/news1',
-                'source': 'Financial Times',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 8.5
-            },
-            {
-                'title': 'Apple and Microsoft Lead Market Gains',
-                'description': 'Major tech companies posted solid gains as quarterly earnings exceeded expectations.',
-                'url': 'https://example.com/news2',
-                'source': 'Reuters',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 7.5
-            },
-            {
-                'title': 'Market Volatility Expected as Fed Meeting Approaches',
-                'description': 'Investors are closely watching the Federal Reserve for signals on future interest rate policy.',
-                'url': 'https://example.com/news3',
-                'source': 'Bloomberg',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 6.5
-            }
-        ]
-    
-    def _get_fallback_market_news(self) -> List[Dict]:
-        """Generate fallback market news for WHY analysis when APIs fail"""
-        return [
-            {
-                'title': 'Tech Stocks Rally on AI Optimism and Strong Earnings',
-                'description': 'Technology sector leads market gains as investors focus on artificial intelligence developments and robust quarterly results from major tech companies.',
-                'url': 'https://marketwatch.com/tech-rally',
-                'source': 'MarketWatch',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 9.0
-            },
-            {
-                'title': 'Federal Reserve Policy Decisions Impact Market Sentiment',
-                'description': 'Investors closely monitor Federal Reserve communications for signals on future interest rate policy, with market volatility expected around key announcements.',
-                'url': 'https://reuters.com/fed-policy',
-                'source': 'Reuters',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 8.5
-            },
-            {
-                'title': 'Sector Rotation Continues as Investors Rebalance Portfolios',
-                'description': 'Market participants continue to rotate between growth and value stocks, with particular focus on technology, healthcare, and financial sectors.',
-                'url': 'https://bloomberg.com/sector-rotation',
-                'source': 'Bloomberg',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 7.5
-            },
-            {
-                'title': 'Earnings Season Drives Individual Stock Performance',
-                'description': 'Corporate earnings reports continue to be the primary driver of individual stock movements, with companies exceeding or missing expectations significantly impacting share prices.',
-                'url': 'https://cnbc.com/earnings-season',
-                'source': 'CNBC',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 8.0
-            },
-            {
-                'title': 'Market Volatility Reflects Economic Uncertainty',
-                'description': 'Ongoing economic uncertainty, including inflation concerns and geopolitical tensions, continues to drive market volatility and investor caution.',
-                'url': 'https://wsj.com/market-volatility',
-                'source': 'Wall Street Journal',
-                'published_at': datetime.now().isoformat(),
-                'relevance_score': 7.0
-            }
-        ]
-    
-    def _get_fallback_company_news(self, symbol: str, company_name: str, percent_change: float) -> List[Dict]:
-        """Generate fallback company-specific news for WHY analysis"""
-        direction = "gained" if percent_change > 0 else "declined"
-        magnitude = "significantly" if abs(percent_change) > 3 else "moderately"
-        
-        # Create contextually relevant news based on the stock's movement
-        if abs(percent_change) > 5:
-            # Large movement - likely earnings or major news
-            if percent_change > 0:
-                return [
-                    {
-                        'title': f'{company_name} ({symbol}) Surges on Strong Earnings Report',
-                        'description': f'{company_name} stock {direction} {magnitude} after reporting quarterly earnings that exceeded analyst expectations, driven by strong revenue growth and improved profitability.',
-                        'url': f'https://marketwatch.com/{symbol.lower()}',
-                        'source': 'MarketWatch',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 9.5
-                    },
-                    {
-                        'title': f'Analysts Raise Price Targets for {company_name}',
-                        'description': f'Multiple analysts have raised their price targets for {company_name} following the positive earnings report, citing strong fundamentals and growth prospects.',
-                        'url': f'https://seekingalpha.com/{symbol.lower()}',
-                        'source': 'Seeking Alpha',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 8.5
-                    }
-                ]
-            else:
-                return [
-                    {
-                        'title': f'{company_name} ({symbol}) Drops on Earnings Miss',
-                        'description': f'{company_name} stock {direction} {magnitude} after reporting quarterly earnings that fell short of analyst expectations, with concerns about future growth prospects.',
-                        'url': f'https://marketwatch.com/{symbol.lower()}',
-                        'source': 'MarketWatch',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 9.5
-                    },
-                    {
-                        'title': f'Analysts Lower Estimates for {company_name}',
-                        'description': f'Analysts have revised their estimates for {company_name} downward following the disappointing earnings report, citing challenges in the current market environment.',
-                        'url': f'https://seekingalpha.com/{symbol.lower()}',
-                        'source': 'Seeking Alpha',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 8.5
-                    }
-                ]
-        else:
-            # Moderate movement - likely market sentiment or sector rotation
-            if percent_change > 0:
-                return [
-                    {
-                        'title': f'{company_name} ({symbol}) Rises with Sector Momentum',
-                        'description': f'{company_name} stock {direction} {magnitude} as the broader sector shows strength, with investors rotating into growth stocks amid positive market sentiment.',
-                        'url': f'https://marketwatch.com/{symbol.lower()}',
-                        'source': 'MarketWatch',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 7.5
-                    },
-                    {
-                        'title': f'Technical Analysis Shows Bullish Signals for {company_name}',
-                        'description': f'Technical indicators suggest positive momentum for {company_name}, with the stock breaking through key resistance levels and showing strong volume.',
-                        'url': f'https://benzinga.com/{symbol.lower()}',
-                        'source': 'Benzinga',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 7.0
-                    }
-                ]
-            else:
-                return [
-                    {
-                        'title': f'{company_name} ({symbol}) Declines Amid Market Pressure',
-                        'description': f'{company_name} stock {direction} {magnitude} as the broader market faces selling pressure, with investors taking profits in growth stocks.',
-                        'url': f'https://marketwatch.com/{symbol.lower()}',
-                        'source': 'MarketWatch',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 7.5
-                    },
-                    {
-                        'title': f'Market Sentiment Weighs on {company_name}',
-                        'description': f'Negative market sentiment and sector rotation are impacting {company_name}, with investors moving away from growth stocks toward value plays.',
-                        'url': f'https://benzinga.com/{symbol.lower()}',
-                        'source': 'Benzinga',
-                        'published_at': datetime.now().isoformat(),
-                        'relevance_score': 7.0
-                    }
-                ]
-    
-    def _create_fallback_news_summary(self, symbol: str, company_name: str, percent_change: float) -> str:
-        """Create a fallback news summary for WHY analysis"""
-        direction = "gained" if percent_change > 0 else "declined"
-        magnitude = "significantly" if abs(percent_change) > 3 else "moderately"
-        
-        if abs(percent_change) > 5:
-            if percent_change > 0:
-                return f"{company_name} ({symbol}) surged {abs(percent_change):.2f}% today, driven by strong quarterly earnings that exceeded analyst expectations. The company reported robust revenue growth and improved profitability, leading multiple analysts to raise their price targets. The positive results reflect strong demand for the company's products/services and effective execution of growth strategies."
-            else:
-                return f"{company_name} ({symbol}) dropped {abs(percent_change):.2f}% today after reporting quarterly earnings that fell short of analyst expectations. The disappointing results raised concerns about future growth prospects and led analysts to revise their estimates downward. The company faces challenges in the current market environment."
-        else:
-            if percent_change > 0:
-                return f"{company_name} ({symbol}) rose {abs(percent_change):.2f}% today, benefiting from positive sector momentum and market sentiment. The stock showed strong technical indicators, breaking through key resistance levels with above-average volume. Investors are rotating into growth stocks amid optimism about economic recovery."
-            else:
-                return f"{company_name} ({symbol}) declined {abs(percent_change):.2f}% today amid broader market selling pressure. The stock was impacted by negative market sentiment and sector rotation, with investors taking profits in growth stocks and moving toward value plays. Technical indicators suggest the stock may find support at current levels."
     
     def get_comprehensive_analysis(self, symbol: Optional[str] = None, market_topic: str = "NASDAQ") -> Dict:
         """Get comprehensive analysis by combining multiple articles and sources"""
@@ -927,11 +721,10 @@ class NewsCollector:
             # Get articles from multiple sources
             newsapi_articles = self.get_newsapi_news(market_topic if not symbol else symbol, 48)
             biztoc_articles = self.get_biztoc_news(market_topic if not symbol else symbol, 48)
-            newsdata_articles = self.get_newsdata_news(market_topic if not symbol else symbol, 48, symbol)
-            the_news_api_articles = self.get_the_news_api_news(market_topic if not symbol else symbol, 48, symbol)
+            finnhub_articles = finnhub_news_adapter.get_company_news(symbol)
             
             # Combine all articles
-            all_articles = newsapi_articles + biztoc_articles + newsdata_articles + the_news_api_articles
+            all_articles = newsapi_articles + biztoc_articles + finnhub_articles
             
             if not all_articles:
                 return {
@@ -941,14 +734,11 @@ class NewsCollector:
                     'word_count': 0
                 }
             
-            # Sort by relevance and recency
-            sorted_articles = sorted(all_articles, 
-                                   key=lambda x: (x.get('relevance_score', 0), x.get('published_at', '')), 
-                                   reverse=True)
+            # Sort by relevance score
+            sorted_articles = sorted(all_articles, key=lambda x: self._calculate_relevance_score(x, market_topic), reverse=True)
             
             # Take top articles with substantial content
-            substantial_articles = [article for article in sorted_articles[:15] 
-                                  if article.get('word_count', 0) > 30]  # Articles with more than 30 words
+            substantial_articles = [article for article in sorted_articles[:15] if len(str(article.get('title', '')) + str(article.get('description', ''))) > 30]
             
             if not substantial_articles:
                 # Fall back to any articles if none have substantial content
@@ -963,7 +753,6 @@ class NewsCollector:
                 title = article.get('title', '')
                 full_text = article.get('full_text', '')
                 source = article.get('source', '')
-                author = article.get('author', '')
                 
                 if full_text:
                     analysis_text += f"{title}\n{full_text}\n\n"
@@ -1102,32 +891,13 @@ class NewsCollector:
                 logger.warning(f"NewsAPI failed for {symbol}: {str(e)}")
             
             try:
-                biztoc_articles = self.get_biztoc_news(symbol, 48, company_name)
+                biztoc_articles = self.get_biztoc_news(symbol, 48)
                 if biztoc_articles:
                     all_articles.extend(biztoc_articles)
                     comprehensive_data['sources_used'].append('Biztoc')
                     logger.info(f"Biztoc: {len(biztoc_articles)} articles for {symbol}")
             except Exception as e:
                 logger.warning(f"Biztoc failed for {symbol}: {str(e)}")
-            
-            try:
-                newsdata_articles = self.get_newsdata_news(symbol, 48, company_name)
-                if newsdata_articles:
-                    all_articles.extend(newsdata_articles)
-                    comprehensive_data['sources_used'].append('NewsData.io')
-                    logger.info(f"NewsData.io: {len(newsdata_articles)} articles for {symbol}")
-            except Exception as e:
-                logger.warning(f"NewsData.io failed for {symbol}: {str(e)}")
-            
-            # 4. Get news from The News API
-            try:
-                thenews_articles = self.get_the_news_api_news(symbol, 48, company_name)
-                if thenews_articles:
-                    all_articles.extend(thenews_articles)
-                    comprehensive_data['sources_used'].append('The News API')
-                    logger.info(f"The News API: {len(thenews_articles)} articles for {symbol}")
-            except Exception as e:
-                logger.warning(f"The News API failed for {symbol}: {str(e)}")
             
             try:
                 finnhub_articles = finnhub_news_adapter.get_company_news(symbol)
@@ -1138,113 +908,69 @@ class NewsCollector:
             except Exception as e:
                 logger.warning(f"Finnhub news failed for {symbol}: {str(e)}")
             
-            try:
-                sentiment_data = finnhub_news_adapter.get_news_sentiment(symbol)
-                if sentiment_data:
-                    comprehensive_data['sentiment_data'] = sentiment_data
-                    logger.info(f"Finnhub sentiment data collected for {symbol}")
-            except Exception as e:
-                logger.warning(f"Finnhub sentiment failed for {symbol}: {str(e)}")
-            
             # Deduplicate and sort articles
             unique_articles = self._deduplicate_news(all_articles)
             sorted_articles = sorted(unique_articles, 
                                    key=lambda x: (x.get('relevance_score', 0), x.get('published_at', '')), 
                                    reverse=True)
             
-            # Filter to today's articles and take top articles
-            today_articles = self._filter_today_articles(sorted_articles)
-            top_articles = today_articles[:10] if today_articles else sorted_articles[:10]
+            # Take top articles with substantial content
+            substantial_articles = [article for article in sorted_articles[:15] if len(str(article.get('title', '')) + str(article.get('description', ''))) > 30]
             
-            comprehensive_data['news_articles'] = top_articles
+            if not substantial_articles:
+                # Fall back to any articles if none have substantial content
+                substantial_articles = sorted_articles[:8]
             
-            catalysts = self._identify_news_catalysts(top_articles)
-            comprehensive_data['catalysts'] = catalysts
+            # Extract key information
+            analysis_text = ""
+            key_points = []
+            sources = []
             
-            # Create comprehensive summary with sentiment integration
-            summary = self._create_comprehensive_summary(
-                symbol, company_name, percent_change, top_articles, 
-                comprehensive_data['sentiment_data'], catalysts
-            )
-            comprehensive_data['summary'] = summary
+            for article in substantial_articles[:8]:  # Use top 8 articles
+                title = article.get('title', '')
+                full_text = article.get('full_text', '')
+                source = article.get('source', '')
+                
+                if full_text:
+                    analysis_text += f"{title}\n{full_text}\n\n"
+                
+                if source and source not in sources:
+                    sources.append(source)
+                
+                # Extract potential key points from title
+                if title and len(title) > 100:
+                    key_points.append(title)
             
-            if top_articles or comprehensive_data['sentiment_data']:
-                comprehensive_data['collection_success'] = True
-                logger.info(f"Comprehensive news collection successful for {symbol}: "
-                           f"{len(top_articles)} articles, {len(comprehensive_data['sources_used'])} sources, "
-                           f"sentiment: {'Yes' if comprehensive_data['sentiment_data'] else 'No'}")
-            else:
-                logger.warning(f"No news or sentiment data collected for {symbol}")
-                # Provide fallback summary
-                comprehensive_data['summary'] = self._create_fallback_news_summary(symbol, company_name, percent_change)
-                comprehensive_data['collection_success'] = True  # Still mark as successful with fallback
+            # Limit key points to top 8
+            key_points = key_points[:8]
+            
+            return {
+                'symbol': symbol,
+                'company_name': company_name,
+                'percent_change': percent_change,
+                'news_articles': substantial_articles,
+                'sentiment_data': {},
+                'summary': "",
+                'catalysts': [],
+                'collection_success': True,
+                'sources_used': ['NewsAPI', 'Biztoc', 'Finnhub'],
+                'timestamp': datetime.now().isoformat()
+            }
             
         except Exception as e:
-            logger.error(f"Error in comprehensive news collection for {symbol}: {str(e)}")
-            comprehensive_data['error'] = str(e)
-            # Provide fallback summary even on error
-            comprehensive_data['summary'] = self._create_fallback_news_summary(symbol, company_name, percent_change)
-            comprehensive_data['collection_success'] = True  # Mark as successful with fallback
-        
-        return comprehensive_data
-    
-    def _create_comprehensive_summary(self, symbol: str, company_name: str, percent_change: float, 
-                                    articles: List[Dict], sentiment_data: Dict, catalysts: List[str]) -> str:
-        """
-        Create a comprehensive news summary integrating multiple sources and Finnhub sentiment
-        Phase 2: Enhanced with sentiment analysis
-        """
-        if not articles and not sentiment_data:
-            return self._create_fallback_news_summary(symbol, company_name, percent_change)
-        
-        summary_parts = []
-        direction = "gained" if percent_change > 0 else "declined"
-        
-        summary_parts.append(f"{company_name} ({symbol}) {direction} {abs(percent_change):.2f}% today")
-        
-        if sentiment_data:
-            company_score = sentiment_data.get('companyNewsScore', 0)
-            sector_score = sentiment_data.get('sectorAverageNewsScore', 0)
-            
-            if company_score != 0:
-                sentiment_desc = "positive" if company_score > 0.1 else "negative" if company_score < -0.1 else "neutral"
-                summary_parts.append(f"with {sentiment_desc} news sentiment (score: {company_score:.2f})")
-                
-                if sector_score != 0:
-                    relative_sentiment = "above" if company_score > sector_score else "below"
-                    summary_parts.append(f"{relative_sentiment} sector average ({sector_score:.2f})")
-        
-        # Add catalyst information
-        if catalysts:
-            catalyst_text = ", ".join(catalysts[:3])  # Top 3 catalysts
-            summary_parts.append(f"driven by {catalyst_text}")
-        
-        if articles:
-            top_article = articles[0]
-            title = top_article.get('title', '')
-            source = top_article.get('source', '')
-            
-            if title:
-                if len(title) > 100:
-                    title = title[:97] + "..."
-                summary_parts.append(f'Key news: "{title}"')
-                
-                if source:
-                    summary_parts.append(f"(via {source})")
-            
-            # Add additional context from other sources
-            if len(articles) > 1:
-                additional_sources = set()
-                for article in articles[1:4]:  # Next 3 articles
-                    article_source = article.get('source', '')
-                    if article_source and article_source != source:
-                        additional_sources.add(article_source)
-                
-                if additional_sources:
-                    sources_text = ", ".join(list(additional_sources)[:2])
-                    summary_parts.append(f"Additional coverage from {sources_text}")
-        
-        return ". ".join(summary_parts) + "."
+            logger.error(f"Error getting comprehensive news for {symbol}: {str(e)}")
+            return {
+                'symbol': symbol,
+                'company_name': company_name,
+                'percent_change': percent_change,
+                'news_articles': [],
+                'sentiment_data': {},
+                'summary': "",
+                'catalysts': [],
+                'collection_success': False,
+                'sources_used': ['NewsAPI', 'Biztoc', 'Finnhub'],
+                'timestamp': datetime.now().isoformat()
+            }
     
     def get_company_news_summary(self, symbol: str, company_name: str, percent_change: float) -> str:
         """Get a comprehensive news summary for a specific company"""
@@ -1264,8 +990,7 @@ class NewsCollector:
             if not all_news:
                 return ""
             
-            # Sort by relevance score
-            sorted_news = sorted(all_news, key=lambda x: x.get('relevance_score', 0), reverse=True)
+            sorted_news = sorted(all_news, key=lambda x: self._calculate_relevance_score(x, symbol), reverse=True)
             
             # Take the most relevant news
             top_news = sorted_news[0]
@@ -1288,7 +1013,7 @@ class NewsCollector:
         try:
             url = "https://newsdata.io/api/1/news"
             params = {
-                "apikey": self.newsdata_api_key,
+                "apikey": self.newsdata_io_api_key,
                 "q": query,
                 "language": "en",
                 "category": "business",
@@ -1302,7 +1027,6 @@ class NewsCollector:
             if data.get('status') == 'success':
                 return data.get('results', [])
             return []
-            
         except Exception as e:
             logger.debug(f"NewsData.io search failed: {str(e)}")
             return []
@@ -1312,7 +1036,7 @@ class NewsCollector:
         try:
             url = "https://newsdata.io/api/1/news"
             params = {
-                "apikey": self.newsdata_api_key,
+                "apikey": self.newsdata_io_api_key,
                 "q": company,
                 "language": "en",
                 "category": "business",
@@ -1326,7 +1050,6 @@ class NewsCollector:
             if data.get('status') == 'success':
                 return data.get('results', [])
             return []
-            
         except Exception as e:
             logger.debug(f"NewsData.io company news failed: {str(e)}")
             return []
@@ -1336,7 +1059,7 @@ class NewsCollector:
         try:
             url = "https://newsdata.io/api/1/news"
             params = {
-                "apikey": self.newsdata_api_key,
+                "apikey": self.newsdata_io_api_key,
                 "q": "stock market NASDAQ",
                 "language": "en",
                 "category": "business",
@@ -1350,7 +1073,6 @@ class NewsCollector:
             if data.get('status') == 'success':
                 return data.get('results', [])
             return []
-            
         except Exception as e:
             logger.debug(f"NewsData.io market news failed: {str(e)}")
             return []
@@ -1372,7 +1094,6 @@ class NewsCollector:
             
             data = response.json()
             return data.get('data', [])
-            
         except Exception as e:
             logger.debug(f"The News API search failed: {str(e)}")
             return []
@@ -1394,7 +1115,6 @@ class NewsCollector:
             
             data = response.json()
             return data.get('data', [])
-            
         except Exception as e:
             logger.debug(f"The News API company news failed: {str(e)}")
             return []
@@ -1415,7 +1135,6 @@ class NewsCollector:
             
             data = response.json()
             return data.get('data', [])
-            
         except Exception as e:
             logger.debug(f"The News API top business failed: {str(e)}")
             return []
@@ -1449,7 +1168,6 @@ class NewsCollector:
             
             # Check if article is from today in market timezone
             return article_date_market.date() == today_market.date()
-            
         except Exception as e:
             logger.debug(f"Error parsing date '{published_at}': {str(e)}")
             return False
@@ -1467,7 +1185,3 @@ class NewsCollector:
         
         logger.info(f"Filtered to {len(today_articles)} today's articles from {len(articles)} total articles")
         return today_articles
-
-
-# Global instance
-news_collector = NewsCollector()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
