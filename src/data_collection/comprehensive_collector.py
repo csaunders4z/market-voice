@@ -5,7 +5,10 @@ Ensures complete coverage of NASDAQ-100 and S&P-500 stocks
 import time
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
-from loguru import logger
+from ..utils.logger import get_logger
+
+# Initialize logger
+logger = get_logger("ComprehensiveCollector")
 import os
 import yfinance as yf
 import requests
@@ -73,39 +76,60 @@ class ComprehensiveDataCollector:
         # For now, use the existing unified collector but with all symbols
         from .unified_data_collector import unified_collector
         
-        # Override the symbols to use all symbols
-        original_symbols = fmp_stock_collector.symbols
-        fmp_stock_collector.symbols = all_symbols
+        # First, collect basic data for all symbols to identify top movers
+        logger.info("Collecting basic data to identify top movers...")
+        basic_data_result = unified_collector.collect_basic_data(symbols=all_symbols, production_mode=production_mode)
         
-        try:
-            result = unified_collector.collect_data(symbols=all_symbols, production_mode=production_mode)
+        if not basic_data_result.get('collection_success'):
+            logger.error("Failed to collect basic data for top movers identification")
+            return basic_data_result
+        
+        # Identify top 5 winners and bottom 5 losers
+        all_stocks = basic_data_result.get('all_data', [])
+        sorted_stocks = sorted(all_stocks, key=lambda x: x.get('change_percent', 0), reverse=True)
+        
+        # Get top 5 winners and bottom 5 losers
+        top_winners = sorted_stocks[:5]
+        bottom_losers = sorted_stocks[-5:]
+        top_movers = top_winners + bottom_losers
+        top_mover_symbols = [stock['symbol'] for stock in top_movers]
+        
+        logger.info(f"Identified top movers: {', '.join(top_mover_symbols)}")
+        
+        # Now collect detailed data including news only for top movers
+        logger.info("Collecting detailed data for top movers...")
+        detailed_result = unified_collector.collect_detailed_data(
+            symbols=top_mover_symbols, 
+            production_mode=production_mode
+        )
+        
+        # Add the top movers info to the result
+        if detailed_result.get('collection_success'):
+            detailed_result['top_winners'] = top_winners
+            detailed_result['bottom_losers'] = bottom_losers
+            detailed_result['all_data'] = all_stocks  # Include all stocks in the result
             
             # Add coverage statistics
-            if result.get('collection_success'):
-                total_coverage = len(result.get('all_data', []))
-                sp500_coverage = len([s for s in result.get('all_data', []) if s['symbol'] in sp500_symbols])
-                nasdaq100_coverage = len([s for s in result.get('all_data', []) if s['symbol'] in nasdaq100_symbols])
-                
-                result['coverage_stats'] = {
-                    'total_coverage': total_coverage,
-                    'sp500_coverage': sp500_coverage,
-                    'nasdaq100_coverage': nasdaq100_coverage,
-                    'coverage_percentage': (total_coverage / len(all_symbols)) * 100 if all_symbols else 0
-                }
-                
-                # Update market summary
-                if 'market_summary' in result:
-                    result['market_summary']['total_target_symbols'] = len(all_symbols)
-                    result['market_summary']['sp500_coverage'] = sp500_coverage
-                    result['market_summary']['nasdaq100_coverage'] = nasdaq100_coverage
-                    result['market_summary']['coverage_percentage'] = (total_coverage / len(all_symbols)) * 100 if all_symbols else 0
-                    result['market_summary']['market_coverage'] = f"Analyzing {total_coverage}/{len(all_symbols)} NASDAQ-100 and S&P-500 stocks ({total_coverage/len(all_symbols)*100:.1f}% coverage)"
+            total_coverage = len(all_stocks)
+            sp500_coverage = len([s for s in all_stocks if s['symbol'] in sp500_symbols])
+            nasdaq100_coverage = len([s for s in all_stocks if s['symbol'] in nasdaq100_symbols])
             
-            return result
+            detailed_result['coverage_stats'] = {
+                'total_coverage': total_coverage,
+                'sp500_coverage': sp500_coverage,
+                'nasdaq100_coverage': nasdaq100_coverage,
+                'coverage_percentage': (total_coverage / len(all_symbols)) * 100 if all_symbols else 0
+            }
             
-        finally:
-            # Restore original symbols
-            fmp_stock_collector.symbols = original_symbols
+            # Update market summary if it exists
+            if 'market_summary' in detailed_result:
+                detailed_result['market_summary']['total_stocks'] = total_coverage
+                detailed_result['market_summary']['sp500_coverage'] = sp500_coverage
+                detailed_result['market_summary']['nasdaq100_coverage'] = nasdaq100_coverage
+                detailed_result['market_summary']['coverage_percentage'] = (total_coverage / len(all_symbols)) * 100 if all_symbols else 0
+                detailed_result['market_summary']['market_coverage'] = f"Analyzing {total_coverage}/{len(all_symbols)} NASDAQ-100 and S&P-500 stocks ({total_coverage/len(all_symbols)*100:.1f}% coverage)"
+        
+        return detailed_result
 
 
 # Global instance

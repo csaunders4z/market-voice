@@ -164,7 +164,57 @@ class FinnhubDataCollector:
             logger.error(f"Finnhub news fetch failed for {symbol}: {str(e)}")
             return []
 
-    # Additional endpoints (sentiment, earnings, etc.) can be added here following the same pattern.
+    def get_market_news(self, category: str = "general") -> List[Dict]:
+        """
+        Get market-wide news from Finnhub.
+        
+        Args:
+            category: News category (e.g., 'general', 'forex', 'crypto', 'merger')
+            
+        Returns:
+            List of market news articles
+        """
+        if self._check_disabled():
+            return []
+        
+        @self.rate_limiter.retry_on_failure(
+            max_retries=self.settings.finnhub_max_retries,
+            base_delay=self.settings.finnhub_rate_limit_delay
+        )
+        def _make_request():
+            self.rate_limiter._wait_for_rate_limit("finnhub", self.settings.finnhub_rate_limit_delay)
+            url = f"{self.base_url}/news"
+            params = {
+                "category": category,
+                "token": self.api_key,
+                "minId": ""  # Pagination support if needed
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        
+        try:
+            data = _make_request()
+            if not data or not isinstance(data, list):
+                logger.warning(f"No market news data from Finnhub for category: {category}")
+                self._finnhub_consecutive_failures += 1
+                if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                    self._finnhub_disabled_for_session = True
+                    logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures.")
+                return []
+            
+            self._finnhub_consecutive_failures = 0
+            return data
+            
+        except Exception as e:
+            self._finnhub_consecutive_failures += 1
+            if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                self._finnhub_disabled_for_session = True
+                logger.error(f"Finnhub API disabled for the remainder of this session after {self._finnhub_failure_threshold} consecutive failures (exception path).")
+            
+            self.rate_limiter._handle_rate_limit_error("finnhub", e)
+            logger.error(f"Finnhub market news fetch failed: {str(e)}")
+            return []
 
 # Global instance
 finnhub_data_collector = FinnhubDataCollector()

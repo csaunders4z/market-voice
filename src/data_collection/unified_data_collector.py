@@ -8,6 +8,10 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Any
 import logging
+from ..utils.logger import get_logger
+
+# Initialize logger
+logger = get_logger("UnifiedDataCollector")
 
 from src.config.settings import get_settings
 from src.utils.rate_limiter import rate_limiter
@@ -435,245 +439,92 @@ class UnifiedDataCollector:
         logger.info(f"Collected market data for {len(stock_data)} stocks from {source}")
         return stock_data
     
-    def collect_data(self, symbols: List[str] = None, production_mode: bool = True) -> Dict:
-        """Collect data from multiple sources with fallback and rate limiting"""
-        logger.info("Starting unified data collection with fallback and rate limiting")
+    def collect_basic_data(self, symbols: List[str], production_mode: bool = True) -> Dict:
+        """Collect only basic price/volume data (no news)"""
+        logger.info(f"Collecting basic data for {len(symbols)} symbols")
         
-        # Use provided symbols or get from FMP
-        if symbols is None:
-            symbols = fmp_stock_collector.symbols[:self.settings.max_symbols_per_collection]
+        # Use the most efficient source for basic data
+        source_order = [
+            ("Yahoo Finance", self._collect_yf_data),
+            ("FMP", self._collect_fmp_data),
+            ("Finnhub", self._collect_finnhub_data),
+            ("Alpha Vantage", self._collect_av_data)
+        ]
         
-        # Ensure symbols is a list
-        if not isinstance(symbols, list):
-            symbols = []
-        
-        logger.info(f"Collecting data for {len(symbols)} symbols")
-        
-        # Initialize market_summary and sentiment dicts
-        market_summary = {}
-        sentiment = {}
-        
-        # Track critical errors
-        critical_errors = []
-        
-        # Try each source in order
-        for source_name, source_func in self.sources:
-            success, data, message = source_func(symbols)
-            
-            # Check for critical API errors
-            if not success and any(error_code in message for error_code in ['429', '401', '403', '500', '502', '503']):
-                critical_errors.append(f"{source_name}: {message}")
-                logger.error(f"Critical API error from {source_name}: {message}")
-                
-                # If we have critical errors from multiple sources, pause collection
-                if len(critical_errors) >= 2:
-                    logger.error("Multiple critical API errors detected. Pausing data collection.")
+        # Try each source until one works
+        for source_name, source_func in source_order:
+            try:
+                success, data, message = source_func(symbols)
+                if success:
                     return {
-                        'collection_success': False,
-                        'error': f'Critical API errors detected: {", ".join(critical_errors)}. Please check API keys and rate limits.',
-                        'data_source': 'Failed - API Errors',
-                        'critical_errors': critical_errors,
+                        'collection_success': True,
+                        'all_data': data,
+                        'data_source': source_name,
                         'timestamp': datetime.now().isoformat()
                     }
+            except Exception as e:
+                logger.warning(f"Failed to collect basic data from {source_name}: {str(e)}")
                 continue
-            
-            if success and data:
-                # Check if we have sufficient data for meaningful analysis
-                if len(data) < 5:
-                    logger.warning(f"Insufficient data from {source_name}: only {len(data)} stocks collected")
-                    continue
-                
-                # Sort by percent change
-                data.sort(key=lambda x: x.get('percent_change', 0), reverse=True)
-
-                # Get top winners and losers
-                winners = [stock for stock in data if stock.get('percent_change', 0) > 0][:5]
-                losers = [stock for stock in data if stock.get('percent_change', 0) < 0][:5]
-
-                # Ensure we have enough data for analysis
-                try:
-                    market_summary['market_sentiment'] = sentiment.get('market_sentiment', 'Mixed')
-                except Exception:
-                    pass
-
-                # Get economic calendar data
-                try:
-                    economic_data = economic_calendar.get_comprehensive_calendar()
-                    market_summary['economic_calendar'] = economic_data
-                except Exception as e:
-                    logger.warning(f"Failed to get economic calendar data: {str(e)}")
-                    market_summary['economic_calendar'] = None
-
-                # Get enhanced news analysis
-                try:
-                    enhanced_news = news_collector.get_enhanced_market_news(
-                        symbols=[stock['symbol'] for stock in data], 
-                        stock_data=data
-                    )
-                    market_summary['enhanced_news'] = enhanced_news
-                    
-                    # ENHANCED: Attach news articles directly to each stock for easier script generation access
-                    if enhanced_news and enhanced_news.get('collection_success'):
-                        company_analysis = enhanced_news.get('company_analysis', {})
-                        
-                        # Attach news articles to each stock in winners and losers (recent articles only)
-                        stocks_with_news = 0
-                        total_articles_attached = 0
-                        
-                        for stock in winners + losers:
-                            symbol = stock.get('symbol', '')
-                            if symbol in company_analysis:
-                                # Filter to recent articles (last 24 hours in market timezone)
-                                all_articles = company_analysis[symbol].get('articles', [])
-                                recent_articles = self._filter_recent_articles(all_articles)
-                                
-                                if recent_articles:
-                                    stock['news_articles'] = recent_articles[:5]  # Top 5 recent articles
-                                    stock['news_analysis'] = company_analysis[symbol].get('analysis_text', '')
-                                    stock['news_sources'] = company_analysis[symbol].get('sources', [])
-                                    stocks_with_news += 1
-                                    total_articles_attached += len(recent_articles)
-                                    logger.debug(f"  {symbol}: {len(recent_articles)} articles attached")
-                                else:
-                                    # Initialize empty arrays to avoid None values
-                                    stock['news_articles'] = []
-                                    stock['news_analysis'] = ''
-                                    stock['news_sources'] = []
-                                    logger.debug(f"  {symbol}: No recent articles found")
-                            else:
-                                # Fallback: try to get basic news data
-                                try:
-                                    basic_news = news_collector.get_market_news(symbols=[symbol])
-                                    if symbol in basic_news.get('company_news', {}):
-                                        # Filter to recent articles only
-                                        all_articles = basic_news['company_news'][symbol]
-                                        recent_articles = self._filter_recent_articles(all_articles)
-                                        if recent_articles:
-                                            stock['news_articles'] = recent_articles[:3]  # Top 3 recent articles
-                                            stocks_with_news += 1
-                                            total_articles_attached += len(recent_articles)
-                                        else:
-                                            stock['news_articles'] = []
-                                    else:
-                                        stock['news_articles'] = []
-                                except Exception as e:
-                                    logger.debug(f"Fallback news collection failed for {symbol}: {e}")
-                                    stock['news_articles'] = []
-                                
-                                stock['news_analysis'] = ''
-                                stock['news_sources'] = []
-                        
-                        logger.info(f"News attachment complete: {stocks_with_news}/{len(winners + losers)} stocks have news, {total_articles_attached} total articles")
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to get enhanced news analysis: {str(e)}")
-                    market_summary['enhanced_news'] = None
-                    
-                    # Fallback: try to get basic news data for top movers
-                    try:
-                        basic_news = news_collector.get_market_news(
-                            symbols=[stock['symbol'] for stock in winners + losers]
-                        )
-                        
-                        for stock in winners + losers:
-                            symbol = stock.get('symbol', '')
-                            if symbol in basic_news.get('company_news', {}):
-                                stock['news_articles'] = basic_news['company_news'][symbol][:3]  # Top 3 articles
-                            else:
-                                stock['news_articles'] = []
-                            stock['news_analysis'] = ''
-                            stock['news_sources'] = []
-                        
-                        logger.info(f"Attached basic news articles to {len(winners + losers)} top movers (fallback)")
-                    except Exception as fallback_error:
-                        logger.warning(f"Failed to get basic news data: {str(fallback_error)}")
-                        # Ensure all stocks have empty news arrays
-                        for stock in winners + losers:
-                            stock['news_articles'] = []
-                            stock['news_analysis'] = ''
-                            stock['news_sources'] = []
-                
-                # Get free news analysis as backup/enhancement
-                try:
-                    free_news = free_news_collector.get_comprehensive_free_news("NASDAQ stock market", 10)
-                    if free_news:
-                        market_summary['free_news'] = {
-                            'articles': free_news,
-                            'article_count': len(free_news),
-                            'sources': list(set(article.get('source', '') for article in free_news)),
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    else:
-                        market_summary['free_news'] = None
-                except Exception as e:
-                    logger.warning(f"Failed to get free news: {str(e)}")
-                    market_summary['free_news'] = None
-                
-                result = {
-                    'market_summary': market_summary,
-                    'winners': winners,
-                    'losers': losers,
-                    'all_data': data,
-                    'collection_success': True,
-                    'data_source': source_name,
-                    'timestamp': datetime.now().isoformat()
-                }
-                
-                logger.info(f"Data collection successful using {source_name}")
-                return result
         
-        # If all sources fail, handle based on production mode
-        if production_mode:
-            logger.error("All data sources failed in production mode")
-            error_message = 'All data sources failed - cannot generate production content without real data'
-            if critical_errors:
-                error_message += f'. Critical errors: {", ".join(critical_errors)}'
+        return {
+            'collection_success': False,
+            'error': 'All data sources failed for basic data collection',
+            'timestamp': datetime.now().isoformat()
+        }
+
+    def collect_detailed_data(self, symbols: List[str], production_mode: bool = True) -> Dict:
+        """Collect detailed data including news for the specified symbols"""
+        logger.info(f"Collecting detailed data for {len(symbols)} symbols")
+        
+        # First get the basic data
+        basic_result = self.collect_basic_data(symbols, production_mode)
+        if not basic_result.get('collection_success'):
+            return basic_result
+        
+        # Now enhance with news and other detailed data
+        try:
+            # Get news data
+            news_data = news_collector.get_market_news(
+                symbols=symbols,
+                stock_data=basic_result['all_data']
+            )
             
+            # Enhance each stock with its news
+            enhanced_data = []
+            for stock in basic_result['all_data']:
+                symbol = stock['symbol']
+                if symbol in news_data.get('company_news', {}):
+                    stock['news_articles'] = news_data['company_news'][symbol]
+                else:
+                    stock['news_articles'] = []
+                enhanced_data.append(stock)
+            
+            return {
+                'collection_success': True,
+                'all_data': enhanced_data,
+                'news_data': news_data,
+                'data_source': basic_result.get('data_source', 'unknown'),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error collecting detailed data: {str(e)}")
             return {
                 'collection_success': False,
-                'error': error_message,
-                'data_source': 'Failed',
-                'critical_errors': critical_errors,
-                'timestamp': datetime.now().isoformat()
-            }
-        else:
-            # Only use cached/mock data in test mode
-            logger.warning("All data sources failed, using cached data (test mode only)")
-            cached_data = self._create_cached_data(symbols[:10])  # Use fewer symbols for cached data
-            
-            # Sort cached data
-            cached_data.sort(key=lambda x: x.get('percent_change', 0), reverse=True)
-            winners = [stock for stock in cached_data if stock.get('percent_change', 0) > 0][:5]
-            losers = [stock for stock in cached_data if stock.get('percent_change', 0) < 0][:5]
-            
-            nasdaq100_count = len(symbol_loader.get_nasdaq_100_symbols())
-            sp500_count = len(symbol_loader.get_sp_500_symbols())
-            market_summary = {
-                'total_stocks_analyzed': len(cached_data),
-                'total_nasdaq_100_stocks': nasdaq100_count,
-                'total_sp_500_stocks': sp500_count,
-                'total_target_symbols': len(symbols),
-                'advancing_stocks': len([s for s in cached_data if s.get('percent_change', 0) > 0]),
-                'declining_stocks': len([s for s in cached_data if s.get('percent_change', 0) < 0]),
-                'average_change': sum(s.get('percent_change', 0) for s in cached_data) / len(cached_data),
-                'market_sentiment': 'Test Data',
-                'market_date': datetime.now().isoformat(),
-                'collection_timestamp': datetime.now().isoformat(),
-                'data_source': 'Cached/Test Data',
-                'market_coverage': f"Analyzing {len(cached_data)} representative NASDAQ-100 and S&P 500 stocks"
-            }
-            
-            return {
-                'market_summary': market_summary,
-                'winners': winners,
-                'losers': losers,
-                'all_data': cached_data,
-                'collection_success': True,
-                'data_source': 'Cached/Test Data',
+                'error': f"Error in detailed data collection: {str(e)}",
                 'timestamp': datetime.now().isoformat()
             }
 
-
+    def collect_data(self, symbols: List[str] = None, production_mode: bool = True) -> Dict:
+        """Main method to collect data (maintains backward compatibility)"""
+        logger.warning("Using legacy collect_data method. Consider using collect_basic_data or collect_detailed_data instead.")
+        
+        if not symbols:
+            symbols = fmp_stock_collector.symbols
+            
+        # Default to detailed data collection for backward compatibility
+        return self.collect_detailed_data(symbols, production_mode)
+    
     def _collect_finnhub_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
         """Collect data from Finnhub with global circuit breaker/session disable logic"""
         if self._finnhub_disabled_for_session:

@@ -48,7 +48,11 @@ class SecurityConfig:
             return False
     
     def validate_secrets_not_logged(self) -> bool:
-        """Validate that no secrets are being logged"""
+        """Validate that no secrets are being logged
+        
+        Returns:
+            bool: True if no secrets found in logs, False if secrets found or error occurred
+        """
         try:
             # Check if any environment variables contain sensitive data
             sensitive_vars = [
@@ -56,20 +60,63 @@ class SecurityConfig:
                 'NEWSDATA_IO_API_KEY', 'THE_NEWS_API_API_KEY', 'BIZTOC_API_KEY'
             ]
             
-            for var in sensitive_vars:
-                value = os.getenv(var)
-                if value and len(value) > 10:  # If it's a real key (not placeholder)
-                    # Check if it appears in any log files
-                    log_files = list(self.logs_dir.glob("*.log"))
-                    for log_file in log_files:
-                        with open(log_file, 'r') as f:
+            # Get all log files
+            if not self.logs_dir.exists():
+                logger.info("Logs directory not found, skipping secrets validation")
+                return True
+                
+            log_files = list(self.logs_dir.glob("*.log"))
+            if not log_files:
+                logger.info("No log files found to validate")
+                return True
+            
+            # Get current environment variables
+            env_vars = {var: os.getenv(var, '') for var in sensitive_vars}
+            
+            # Only check for variables that have actual values (not empty or placeholder)
+            sensitive_values = {
+                var: value for var, value in env_vars.items() 
+                if value and len(value) > 10 and not value.startswith(('your_', 'test_'))
+            }
+            
+            if not sensitive_values:
+                logger.debug("No sensitive values found in environment to validate")
+                return True
+            
+            # Check each log file
+            for log_file in log_files:
+                try:
+                    # Try to read with UTF-8 first, fall back to latin-1 if that fails
+                    try:
+                        with open(log_file, 'r', encoding='utf-8') as f:
                             content = f.read()
-                            if value in content:
-                                logger.error(f"SECURITY ALERT: API key found in log file {log_file}")
-                                return False
+                    except UnicodeDecodeError:
+                        logger.debug(f"Falling back to latin-1 encoding for {log_file}")
+                        with open(log_file, 'r', encoding='latin-1') as f:
+                            content = f.read()
+                    
+                    # Check for each sensitive value
+                    for var_name, value in sensitive_values.items():
+                        if value and value in content:
+                            # Log a warning but don't show the actual value
+                            logger.warning(
+                                f"Potential security issue: Value for {var_name} found in {log_file.name}"
+                            )
+                            # Return False to indicate potential security issue
+                            return False
+                            
+                except Exception as file_error:
+                    logger.warning(
+                        f"Error checking log file {log_file}: {str(file_error)}"
+                    )
+                    # Continue with other files
+                    continue
+            
             return True
+            
         except Exception as e:
             logger.error(f"Failed to validate secrets logging: {str(e)}")
+            # Return False on error to be safe
             return False
     
     def check_file_permissions(self) -> dict:

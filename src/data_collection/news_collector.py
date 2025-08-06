@@ -49,6 +49,10 @@ class NewsCollector:
         self._thenewsapi_consecutive_failures = 0
         self._thenewsapi_failure_threshold = 5  # configurable
         self._thenewsapi_disabled_for_session = False
+        # Global circuit breaker/session disable for Finnhub
+        self._finnhub_consecutive_failures = 0
+        self._finnhub_failure_threshold = 5  # configurable
+        self._finnhub_disabled_for_session = False
     
     def reset_circuit_breakers(self):
         """Reset all circuit breakers - call this periodically or on successful requests"""
@@ -60,6 +64,8 @@ class NewsCollector:
         self._biztoc_disabled_for_session = False
         self._thenewsapi_consecutive_failures = 0
         self._thenewsapi_disabled_for_session = False
+        self._finnhub_consecutive_failures = 0
+        self._finnhub_disabled_for_session = False
         logger.info("Circuit breakers reset")
 
     def _get_market_time_range(self, hours_back: int = 24) -> tuple[datetime, datetime]:
@@ -316,6 +322,74 @@ class NewsCollector:
             
         except Exception as e:
             logger.error(f"Error fetching The News API data: {str(e)}")
+            return []
+    
+    def get_finnhub_news(self, symbol: str, category: str = "general") -> List[Dict]:
+        """
+        Get news from Finnhub for a specific symbol or market category.
+        
+        Args:
+            symbol: Stock symbol or 'market' for general market news
+            category: News category (only used for market news)
+            
+        Returns:
+            List of formatted news articles
+        """
+        if self._finnhub_disabled_for_session:
+            logger.debug(f"Finnhub is disabled for this session, skipping news fetch for {symbol}")
+            return []
+            
+        try:
+            if symbol.lower() == 'market':
+                # For market news, we'll use company news with a market index symbol
+                # Note: This is a workaround since we don't have a direct market news endpoint
+                articles = finnhub_news_adapter.get_company_news(symbol="^GSPC")  # S&P 500 as market indicator
+            else:
+                # Get company-specific news
+                from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+                to_date = datetime.now().strftime('%Y-%m-%d')
+                articles = finnhub_news_adapter.get_company_news(symbol, from_date, to_date)
+            
+            if not articles:
+                logger.debug(f"No articles returned from Finnhub for {symbol}")
+                return []
+                
+            # Format articles consistently
+            formatted_articles = []
+            for article in articles:
+                try:
+                    # Skip articles without required fields
+                    if not article.get('title'):
+                        continue
+                        
+                    formatted_article = {
+                        'title': article.get('title', ''),
+                        'description': article.get('description', ''),
+                        'url': article.get('url', ''),
+                        'source': article.get('source', 'Finnhub'),
+                        'published_at': article.get('published_at', datetime.now().isoformat()),
+                        'content': '',  # Not available from the current API
+                        'image_url': '',  # Not available from the current API
+                        'relevance_score': article.get('relevance_score', 0.8),
+                        'sentiment': 0,  # Not directly available
+                        'symbols': [symbol.upper()] if symbol.lower() != 'market' else []
+                    }
+                    
+                    formatted_articles.append(formatted_article)
+                    
+                except Exception as e:
+                    logger.warning(f"Error formatting Finnhub article: {str(e)}")
+                    continue
+                    
+            logger.info(f"Retrieved {len(formatted_articles)} articles from Finnhub for {symbol}")
+            return formatted_articles
+            
+        except Exception as e:
+            logger.error(f"Error getting Finnhub news for {symbol}: {str(e)}")
+            self._finnhub_consecutive_failures += 1
+            if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                self._finnhub_disabled_for_session = True
+                logger.error(f"Finnhub news disabled for session after {self._finnhub_failure_threshold} failures")
             return []
     
     def _get_biztoc_search(self, query: str, limit: int = 10) -> List[Dict]:
@@ -608,102 +682,218 @@ class NewsCollector:
         all_news = {
             'market_news': [],
             'company_news': {},
-            'news_summaries': {},  # New field for stock-specific news summaries
+            'news_summaries': {},
             'collection_success': False,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'sources_used': []
         }
         
         try:
-            # Get general market news
-            market_news = self.get_newsapi_news("NASDAQ stock market", 24)
-            biztoc_news = self.get_biztoc_news("NASDAQ", 24)
+            # 1. Get general market news from multiple sources
+            market_news_sources = []
             
-            # Combine and deduplicate news
-            combined_news = market_news + biztoc_news
-            unique_news = self._deduplicate_news(combined_news)
+            # Try NewsAPI if available
+            if not self._newsapi_disabled_for_session:
+                try:
+                    newsapi_news = self.get_newsapi_news("NASDAQ stock market", 48)  # Extended to 48 hours
+                    if newsapi_news:
+                        market_news_sources.extend(newsapi_news)
+                        all_news['sources_used'].append('NewsAPI')
+                except Exception as e:
+                    logger.warning(f"NewsAPI failed: {str(e)}")
             
-            # Sort by relevance and recency
-            sorted_news = sorted(unique_news, 
-                               key=lambda x: (x.get('relevance_score', 0), x.get('published_at', '')), 
-                               reverse=True)
+            # Try Biztoc if available
+            if not self._biztoc_disabled_for_session:
+                try:
+                    biztoc_news = self.get_biztoc_news("NASDAQ", 48)  # Extended to 48 hours
+                    if biztoc_news:
+                        market_news_sources.extend(biztoc_news)
+                        all_news['sources_used'].append('Biztoc')
+                except Exception as e:
+                    logger.warning(f"Biztoc failed: {str(e)}")
             
-            all_news['market_news'] = sorted_news[:15]  # Top 15 most relevant
+            # Add Finnhub market news
+            try:
+                finnhub_news = self.get_finnhub_news("market")  # New method to get Finnhub market news
+                if finnhub_news:
+                    market_news_sources.extend(finnhub_news)
+                    all_news['sources_used'].append('Finnhub')
+            except Exception as e:
+                logger.warning(f"Finnhub market news failed: {str(e)}")
             
-            # Get company-specific news for top movers
-            if stock_data:
-                for stock in stock_data[:5]:  # Top 5 stocks
-                    symbol = stock.get('symbol', '')
-                    company_news = self.get_newsapi_news(symbol, 48)
-                    if company_news:
-                        all_news['company_news'][symbol] = company_news[:3]  # Top 3 per company
-            
-            # ENHANCED: Get comprehensive news for ALL top movers (expanded coverage)
-            if stock_data:
-                # Process top 10 winners and losers for comprehensive news
-                sorted_stocks = sorted(stock_data, key=lambda x: abs(x.get('percent_change', 0)), reverse=True)
-                top_movers = sorted_stocks[:20]  # Top 20 movers get full news analysis
+            # 2. Process and deduplicate all market news
+            if market_news_sources:
+                unique_news = self._deduplicate_news(market_news_sources)
                 
-                comprehensive_news = {}
+                # Sort by relevance and recency (less strict date filtering)
+                sorted_news = sorted(
+                    unique_news,
+                    key=lambda x: (
+                        x.get('relevance_score', 0),
+                        x.get('published_at', '')
+                    ),
+                    reverse=True
+                )
+                
+                # Include articles from the last 3 days, not just today
+                recent_news = [
+                    n for n in sorted_news 
+                    if self._is_recent_article(n.get('published_at', ''), days=3)
+                ]
+                
+                all_news['market_news'] = recent_news[:20]  # Top 20 most relevant
+            
+            # 3. Get company-specific news for top movers
+            if stock_data:
+                # Sort by absolute percent change to get top movers
+                sorted_stocks = sorted(
+                    stock_data, 
+                    key=lambda x: abs(x.get('percent_change', 0)), 
+                    reverse=True
+                )
+                
+                # Process top 10 movers for detailed news
+                top_movers = sorted_stocks[:10]
                 
                 for stock in top_movers:
                     symbol = stock.get('symbol', '')
                     company_name = stock.get('company_name', '')
                     percent_change = stock.get('percent_change', 0)
                     
-                    if symbol and abs(percent_change) >= 1:  # Lowered threshold
+                    if not symbol or abs(percent_change) < 1.0:  # Minimum 1% move
+                        continue
+                        
+                    try:
+                        # Get comprehensive news with fallback
+                        comp_news = self.get_comprehensive_company_news(
+                            symbol, 
+                            company_name, 
+                            percent_change
+                        )
+                        
+                        if comp_news.get('collection_success'):
+                            all_news['company_news'][symbol] = comp_news.get('articles', [])[:3]
+                            all_news['news_summaries'][symbol] = comp_news.get('summary', '')
+                            
+                            # Track which sources were used
+                            if 'sources' in comp_news:
+                                all_news['sources_used'].extend(
+                                    src for src in comp_news['sources'] 
+                                    if src not in all_news['sources_used']
+                                )
+                    except Exception as e:
+                        logger.warning(f"Failed to get comprehensive news for {symbol}: {str(e)}")
+                        
+                        # Fallback to simple summary
                         try:
-                            # Get comprehensive news (includes catalysts and detailed analysis)
-                            comp_news = self.get_comprehensive_company_news(symbol, company_name, percent_change)
-                            if comp_news.get('collection_success'):
-                                comprehensive_news[symbol] = comp_news
-                                
-                                # Also add to simple summaries for backward compatibility
-                                if comp_news.get('summary'):
-                                    all_news['news_summaries'][symbol] = comp_news['summary']
-                        except Exception as e:
-                            logger.warning(f"Failed to get comprehensive news for {symbol}: {str(e)}")
-                            # Fallback to simple summary
-                            news_summary = self.get_company_news_summary(symbol, company_name, percent_change)
+                            news_summary = self.get_company_news_summary(
+                                symbol, 
+                                company_name, 
+                                percent_change
+                            )
                             if news_summary:
                                 all_news['news_summaries'][symbol] = news_summary
-                
-                # Add comprehensive news data
-                all_news['comprehensive_news'] = comprehensive_news
-                logger.info(f"Comprehensive news collected for {len(comprehensive_news)} stocks")
+                        except Exception as summary_error:
+                            logger.warning(f"Fallback summary failed for {symbol}: {str(summary_error)}")
             
-            # ENHANCED: If no news collected from APIs, provide fallback news for WHY analysis
+            # 4. Final fallback if no news was collected
             if not all_news['market_news'] and not all_news['company_news']:
-                logger.warning("No news collected from APIs, providing fallback news for WHY analysis")
+                logger.warning("No news collected from any source, using fallback news")
                 all_news['market_news'] = self._get_fallback_market_news()
+                all_news['sources_used'].append('Fallback')
                 
-                # Provide company-specific fallback news for top movers
+                # Add fallback for top movers if available
                 if stock_data:
-                    for stock in stock_data[:10]:  # Top 10 movers
+                    for stock in stock_data[:5]:
                         symbol = stock.get('symbol', '')
                         company_name = stock.get('company_name', '')
                         percent_change = stock.get('percent_change', 0)
                         
-                        if symbol and abs(percent_change) >= 1:
-                            fallback_news = self._get_fallback_company_news(symbol, company_name, percent_change)
+                        if symbol and abs(percent_change) >= 1.0:
+                            fallback_news = self._get_fallback_company_news(
+                                symbol, 
+                                company_name, 
+                                percent_change
+                            )
                             all_news['company_news'][symbol] = fallback_news
-                            
-                            # Create a news summary for WHY analysis
-                            all_news['news_summaries'][symbol] = self._create_fallback_news_summary(symbol, company_name, percent_change)
+                            all_news['news_summaries'][symbol] = self._create_fallback_news_summary(
+                                symbol, 
+                                company_name, 
+                                percent_change
+                            )
             
-            all_news['collection_success'] = True
-            logger.info(f"News collection completed. Market news: {len(all_news['market_news'])}, "
-                       f"Company news for {len(all_news['company_news'])} companies, "
-                       f"News summaries for {len(all_news['news_summaries'])} stocks")
+            # 5. Final status and logging
+            all_news['collection_success'] = bool(
+                all_news['market_news'] or 
+                all_news['company_news'] or
+                all_news['news_summaries']
+            )
+            
+            # Remove duplicate sources
+            all_news['sources_used'] = list(dict.fromkeys(all_news['sources_used']))
+            
+            logger.info(
+                f"News collection completed. "
+                f"Market news: {len(all_news['market_news'])}, "
+                f"Company news: {len(all_news['company_news'])} companies, "
+                f"Summaries: {len(all_news['news_summaries'])} stocks, "
+                f"Sources: {', '.join(all_news['sources_used']) or 'None'}"
+            )
             
         except Exception as e:
-            logger.error(f"Error in news collection: {str(e)}")
+            logger.error(f"Error in news collection: {str(e)}", exc_info=True)
             all_news['error'] = str(e)
             
-            # Even if there's an error, provide fallback news for WHY analysis
-            all_news['market_news'] = self._get_fallback_market_news()
-            all_news['collection_success'] = True  # Mark as successful with fallback data
+            # Provide fallback data even in case of errors
+            if not all_news['market_news']:
+                all_news['market_news'] = self._get_fallback_market_news()
+                all_news['sources_used'].append('Fallback')
+            
+            all_news['collection_success'] = bool(
+                all_news['market_news'] or 
+                all_news['company_news'] or
+                all_news['news_summaries']
+            )
         
         return all_news
+    
+    def _is_recent_article(self, published_at: str, days: int = 3) -> bool:
+        """Check if article was published within the last N days"""
+        if not published_at:
+            return False
+            
+        try:
+            # Handle integer timestamps (from Finnhub)
+            if isinstance(published_at, (int, float)):
+                article_date = datetime.fromtimestamp(published_at, tz=pytz.UTC)
+            # Handle string dates
+            elif isinstance(published_at, str):
+                # Try parsing as ISO format first
+                try:
+                    article_date = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+                except ValueError:
+                    # Try other common formats if needed
+                    for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%d/%m/%Y']:
+                        try:
+                            article_date = datetime.strptime(published_at, fmt).replace(tzinfo=pytz.UTC)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        return False  # Couldn't parse date
+            else:
+                return False  # Unsupported type
+            
+            # Convert both dates to the same timezone for comparison
+            now = datetime.now(pytz.UTC)
+            article_date = article_date.astimezone(pytz.UTC)
+            
+            # Check if within N days
+            return (now - article_date).days < days
+            
+        except Exception as e:
+            logger.debug(f"Error parsing article date '{published_at}': {str(e)}")
+            return False  # Be permissive with date parsing errors
     
     def _calculate_relevance_score(self, article: Dict, query: str) -> float:
         """Calculate relevance score for an article"""
@@ -721,75 +911,180 @@ class NewsCollector:
         return score
     
     def get_comprehensive_analysis(self, symbol: Optional[str] = None, market_topic: str = "NASDAQ") -> Dict:
-        """Get comprehensive analysis by combining multiple articles and sources"""
+        """
+        Get comprehensive analysis by combining multiple articles and sources with enhanced error handling
+        
+        Args:
+            symbol: Optional stock symbol for company-specific analysis
+            market_topic: Market topic for general market analysis
+            
+        Returns:
+            Dictionary containing comprehensive analysis and source metadata
+        """
+        logger.info(f"Starting comprehensive analysis for {symbol or market_topic}")
+        
+        result = {
+            'symbol': symbol,
+            'market_topic': market_topic,
+            'articles': [],
+            'summary': '',
+            'sentiment': 0.0,
+            'key_themes': [],
+            'catalysts': [],
+            'sources_used': [],
+            'collection_success': False,
+            'timestamp': datetime.now(self.market_tz).isoformat()
+        }
+        
         try:
-            # Get articles from multiple sources
-            newsapi_articles = self.get_newsapi_news(market_topic if not symbol else symbol, 48)
-            biztoc_articles = self.get_biztoc_news(market_topic if not symbol else symbol, 48)
-            finnhub_articles = finnhub_news_adapter.get_company_news(symbol)
+            all_articles = []
+            sources_used = set()
             
-            # Combine all articles
-            all_articles = newsapi_articles + biztoc_articles + finnhub_articles
+            # 1. Get market or company news based on input
+            if symbol:
+                # Get company-specific news from multiple sources
+                try:
+                    # Try Finnhub first for company news
+                    finnhub_articles = self.get_finnhub_news(symbol)
+                    if finnhub_articles:
+                        all_articles.extend(finnhub_articles)
+                        sources_used.add('Finnhub')
+                        logger.info(f"Finnhub: {len(finnhub_articles)} articles for {symbol}")
+                except Exception as e:
+                    logger.warning(f"Finnhub company news failed for {symbol}: {str(e)}")
+                
+                # Fall back to other sources if needed
+                if not all_articles:
+                    try:
+                        newsapi_articles = self.get_newsapi_news(symbol, 72)  # 3 days
+                        if newsapi_articles:
+                            all_articles.extend(newsapi_articles)
+                            sources_used.add('NewsAPI')
+                    except Exception as e:
+                        logger.warning(f"NewsAPI failed for {symbol}: {str(e)}")
+                    
+                    try:
+                        biztoc_articles = self.get_biztoc_news(symbol, 72)  # 3 days
+                        if biztoc_articles:
+                            all_articles.extend(biztoc_articles)
+                            sources_used.add('Biztoc')
+                    except Exception as e:
+                        logger.warning(f"Biztoc failed for {symbol}: {str(e)}")
+            else:
+                # Get market news
+                try:
+                    market_articles = self.get_finnhub_news('market')
+                    if market_articles:
+                        all_articles.extend(market_articles)
+                        sources_used.add('Finnhub')
+                        logger.info(f"Finnhub: {len(market_articles)} market articles")
+                except Exception as e:
+                    logger.warning(f"Finnhub market news failed: {str(e)}")
+                
+                # Fall back to other market news sources
+                try:
+                    newsapi_market = self.get_newsapi_news(market_topic, 48)
+                    if newsapi_market:
+                        all_articles.extend(newsapi_market)
+                        sources_used.add('NewsAPI')
+                except Exception as e:
+                    logger.warning(f"NewsAPI market news failed: {str(e)}")
             
-            if not all_articles:
+            # 2. Deduplicate and filter articles
+            if all_articles:
+                # Deduplicate by URL and title
+                unique_articles = self._deduplicate_news(all_articles)
+                
+                # Filter to recent articles (last 3 days)
+                recent_articles = [
+                    a for a in unique_articles 
+                    if self._is_recent_article(a.get('published_at', ''), days=3)
+                ]
+                
+                # Sort by relevance and recency
+                recent_articles.sort(
+                    key=lambda x: (
+                        x.get('relevance_score', 0.5),
+                        x.get('published_at', '')
+                    ),
+                    reverse=True
+                )
+                
+                # Include articles from the last 3 days, not just today
+                substantial_articles = [article for article in recent_articles[:15] if len(str(article.get('title', '')) + str(article.get('description', ''))) > 30]
+                
+                if not substantial_articles:
+                    # Fall back to any articles if none have substantial content
+                    substantial_articles = recent_articles[:8]
+                
+                # Extract key information
+                analysis_text = ""
+                key_points = []
+                sources = []
+                
+                for article in substantial_articles[:8]:  # Use top 8 articles
+                    title = article.get('title', '')
+                    full_text = article.get('full_text', '')
+                    source = article.get('source', '')
+                    
+                    if full_text:
+                        analysis_text += f"{title}\n{full_text}\n\n"
+                    
+                    if source and source not in sources:
+                        sources.append(source)
+                
+                    # Extract potential key points from title
+                    if title and len(title) > 100:
+                        key_points.append(title)
+                
+                # Limit key points to top 8
+                key_points = key_points[:8]
+                
                 return {
-                    'analysis_text': '',
-                    'key_points': [],
-                    'sources': [],
-                    'word_count': 0
+                    'symbol': symbol,
+                    'market_topic': market_topic,
+                    'articles': substantial_articles,
+                    'summary': "",
+                    'sentiment_data': {},
+                    'key_points': key_points,
+                    'catalysts': [],
+                    'collection_success': True,
+                    'sources_used': ['NewsAPI', 'Biztoc', 'Finnhub'],
+                    'timestamp': datetime.now().isoformat()
                 }
             
-            # Sort by relevance score
-            sorted_articles = sorted(all_articles, key=lambda x: self._calculate_relevance_score(x, market_topic), reverse=True)
-            
-            # Take top articles with substantial content
-            substantial_articles = [article for article in sorted_articles[:15] if len(str(article.get('title', '')) + str(article.get('description', ''))) > 30]
-            
-            if not substantial_articles:
-                # Fall back to any articles if none have substantial content
-                substantial_articles = sorted_articles[:8]
-            
-            # Extract key information
-            analysis_text = ""
-            key_points = []
-            sources = []
-            
-            for article in substantial_articles[:8]:  # Use top 8 articles
-                title = article.get('title', '')
-                full_text = article.get('full_text', '')
-                source = article.get('source', '')
+            # 3. Generate summary and analysis if we have articles
+            if result['articles']:
+                result['summary'] = self._create_news_summary(result['articles'], symbol or market_topic)
                 
-                if full_text:
-                    analysis_text += f"{title}\n{full_text}\n\n"
+                # Extract key themes and sentiment
+                themes_sentiment = self._analyze_news_themes(result['articles'])
+                result['key_themes'] = themes_sentiment.get('themes', [])
+                result['sentiment'] = themes_sentiment.get('sentiment', 0.0)
                 
-                if source and source not in sources:
-                    sources.append(source)
+                # Identify potential catalysts
+                result['catalysts'] = self._identify_news_catalysts(result['articles'])
                 
-                # Extract potential key points from title
-                if title and len(title) > 20:
-                    key_points.append(title)
-            
-            # Limit key points to top 8
-            key_points = key_points[:8]
-            
-            return {
-                'analysis_text': analysis_text.strip(),
-                'key_points': key_points,
-                'sources': sources,
-                'word_count': len(analysis_text.split()),
-                'article_count': len(substantial_articles),
-                'timestamp': datetime.now().isoformat()
-            }
+                result['collection_success'] = True
+                logger.info(f"Generated comprehensive analysis with {len(result['articles'])} articles")
+            else:
+                logger.warning("No recent articles found after filtering")
+                result['summary'] = self._create_fallback_news_summary(
+                    symbol or market_topic, 
+                    market_topic if not symbol else "",
+                    0
+                )
             
         except Exception as e:
-            logger.error(f"Error getting comprehensive analysis: {str(e)}")
-            return {
-                'analysis_text': '',
-                'key_points': [],
-                'sources': [],
-                'word_count': 0,
-                'error': str(e)
-            }
+            logger.error(f"Error in comprehensive analysis: {str(e)}", exc_info=True)
+            result['error'] = str(e)
+            result['summary'] = self._create_fallback_news_summary(
+                symbol or market_topic, 
+                market_topic if not symbol else "",
+                0
+            )
+        
+        return result
     
     def get_enhanced_market_news(self, symbols: Optional[List[str]] = None, stock_data: Optional[List[Dict]] = None) -> Dict:
         """Get enhanced market news with comprehensive analysis"""
@@ -891,7 +1186,6 @@ class NewsCollector:
                 if newsapi_articles:
                     all_articles.extend(newsapi_articles)
                     comprehensive_data['sources_used'].append('NewsAPI')
-                    logger.info(f"NewsAPI: {len(newsapi_articles)} articles for {symbol}")
             except Exception as e:
                 logger.warning(f"NewsAPI failed for {symbol}: {str(e)}")
             
@@ -900,7 +1194,6 @@ class NewsCollector:
                 if biztoc_articles:
                     all_articles.extend(biztoc_articles)
                     comprehensive_data['sources_used'].append('Biztoc')
-                    logger.info(f"Biztoc: {len(biztoc_articles)} articles for {symbol}")
             except Exception as e:
                 logger.warning(f"Biztoc failed for {symbol}: {str(e)}")
             
@@ -909,7 +1202,6 @@ class NewsCollector:
                 if finnhub_articles:
                     all_articles.extend(finnhub_articles)
                     comprehensive_data['sources_used'].append('Finnhub')
-                    logger.info(f"Finnhub: {len(finnhub_articles)} articles for {symbol}")
             except Exception as e:
                 logger.warning(f"Finnhub news failed for {symbol}: {str(e)}")
             
@@ -1190,6 +1482,264 @@ class NewsCollector:
         
         logger.info(f"Filtered to {len(today_articles)} today's articles from {len(articles)} total articles")
         return today_articles
+    
+    def _deduplicate_news(self, articles: List[Dict]) -> List[Dict]:
+        """Deduplicate news articles based on URL or title.
+        
+        Args:
+            articles: List of article dictionaries
+            
+        Returns:
+            List of unique articles
+        """
+        if not articles:
+            return []
+            
+        seen = set()
+        unique_articles = []
+        
+        for article in articles:
+            url = article.get('url', '').strip()
+            title = article.get('title', '').strip()
+            
+            # Create a unique identifier for the article
+            if not url and not title:
+                continue
+                
+            article_id = f"{url}:{title}"
+            
+            if article_id not in seen:
+                seen.add(article_id)
+                unique_articles.append(article)
+                
+        return unique_articles
+    
+    def _get_fallback_market_news(self) -> List[Dict]:
+        """Generate fallback market news when no API calls succeed.
+        
+        Returns:
+            List of fallback news articles
+        """
+        logger.warning("Using fallback market news - no API data available")
+        
+        # Get current market date
+        market_date = datetime.now(self.market_tz).strftime("%B %d, %Y")
+        
+        return [
+            {
+                'title': 'Market Update',
+                'description': f'Comprehensive market analysis for {market_date} will be available in the full report.',
+                'url': '',
+                'source': 'Market Voices',
+                'published_at': datetime.now().isoformat(),
+                'relevance_score': 1.0
+            },
+            {
+                'title': 'Market Overview',
+                'description': 'Stay tuned for the latest market insights and analysis.',
+                'url': '',
+                'source': 'Market Voices',
+                'published_at': datetime.now().isoformat(),
+                'relevance_score': 0.8
+            }
+        ]
+
+    def _get_fallback_company_news(self, symbol: str, company_name: str, percent_change: float) -> List[Dict]:
+        """Generate fallback company news when no API calls succeed.
+        
+        Args:
+            symbol: Stock symbol
+            company_name: Company name
+            percent_change: Price change percentage
+            
+        Returns:
+            List of fallback news articles for the company
+        """
+        logger.warning(f"Using fallback news for {symbol} - no API data available")
+        
+        change_direction = "up" if percent_change >= 0 else "down"
+        abs_change = abs(percent_change)
+        
+        return [
+            {
+                'title': f'{company_name} ({symbol}) Update',
+                'description': f'{company_name} ({symbol}) is {change_direction} {abs_change:.2f}% today.',
+                'url': '',
+                'source': 'Market Voices',
+                'published_at': datetime.now().isoformat(),
+                'relevance_score': 1.0
+            }
+        ]
+    
+    def _create_fallback_news_summary(self, symbol: str, company_name: str, percent_change: float) -> str:
+        """Create a fallback news summary for a company when no API calls succeed.
+        
+        Args:
+            symbol: Stock symbol
+            company_name: Company name
+            percent_change: Price change percentage
+            
+        Returns:
+            Fallback news summary
+        """
+        change_direction = "up" if percent_change >= 0 else "down"
+        abs_change = abs(percent_change)
+        
+        return f"{company_name} ({symbol}) is {change_direction} {abs_change:.2f}% today."
+
+    def get_market_news(self, symbols: List[str], stock_data: List[Dict] = None) -> Dict:
+        """Get market news for the given symbols with better error handling"""
+        if not symbols:
+            logger.warning("No symbols provided for news collection")
+            return {'company_news': {}}
+        
+        logger.info(f"Fetching news for {len(symbols)} symbols")
+        
+        # Initialize result structures
+        company_news = {symbol: [] for symbol in symbols}
+        news_summaries = {}
+        successful_symbols = []
+        failed_symbols = []
+        
+        # Try Finnhub first (most reliable)
+        if not self._finnhub_disabled_for_session:
+            finnhub_news = self._get_finnhub_news(symbols)
+            
+            # Process Finnhub results
+            for symbol, articles in finnhub_news.items():
+                if articles:
+                    company_news[symbol] = articles
+                    successful_symbols.append(symbol)
+                    logger.debug(f"Got {len(articles)} articles for {symbol} from Finnhub")
+                else:
+                    failed_symbols.append(symbol)
+        else:
+            logger.warning("Finnhub is disabled for this session, skipping")
+            failed_symbols = symbols.copy()
+        
+        # For any symbols that failed with Finnhub, try secondary sources
+        if failed_symbols and not self._newsapi_disabled_for_session:
+            logger.info(f"Trying secondary news sources for {len(failed_symbols)} symbols")
+            
+            # Try NewsAPI for failed symbols
+            newsapi_news = self._get_newsapi_news_for_symbols(failed_symbols)
+            
+            # Process NewsAPI results
+            for symbol, articles in newsapi_news.items():
+                if articles:
+                    company_news[symbol] = articles
+                    if symbol in failed_symbols:
+                        failed_symbols.remove(symbol)
+                    if symbol not in successful_symbols:
+                        successful_symbols.append(symbol)
+                    logger.debug(f"Got {len(articles)} articles for {symbol} from NewsAPI")
+        
+        # Generate news summaries for successful symbols
+        for symbol in successful_symbols:
+            articles = company_news.get(symbol, [])
+            if articles:
+                # Create a simple summary of the news
+                summary = f"Found {len(articles)} recent news articles. "
+                if len(articles) > 0:
+                    summary += f"Latest headline: {articles[0].get('headline', 'N/A')}"
+                news_summaries[symbol] = summary
+        
+        # Log overall results
+        if successful_symbols:
+            logger.info(f"Successfully fetched news for {len(successful_symbols)}/{len(symbols)} symbols")
+        if failed_symbols:
+            logger.warning(f"Failed to fetch news for {len(failed_symbols)} symbols: {', '.join(failed_symbols)}")
+        
+        return {
+            'company_news': company_news,
+            'news_summaries': news_summaries,
+            'successful_symbols': successful_symbols,
+            'failed_symbols': failed_symbols,
+            'timestamp': datetime.now().isoformat()
+        }
+
+    def _get_finnhub_news(self, symbols: List[str]) -> Dict[str, List[Dict]]:
+        """Get news from Finnhub for multiple symbols with error handling"""
+        if self._finnhub_disabled_for_session:
+            return {symbol: [] for symbol in symbols}
+            
+        try:
+            from finnhub_news_adapter import finnhub_news_adapter
+            
+            result = {}
+            
+            # Process symbols in batches to avoid rate limits
+            for i in range(0, len(symbols), 5):  # Process 5 symbols at a time
+                batch = symbols[i:i+5]
+                
+                try:
+                    # Use the finnhub_news_adapter to get news for this batch
+                    batch_news = finnhub_news_adapter.get_news_for_symbols(batch)
+                    
+                    # Merge results
+                    for symbol, articles in batch_news.items():
+                        result[symbol] = articles
+                    
+                    # Be nice to the API
+                    if i + 5 < len(symbols):
+                        time.sleep(1)  # 1 second between batches
+                        
+                except Exception as e:
+                    logger.warning(f"Error fetching Finnhub news for batch {i//5 + 1}: {str(e)}")
+                    # Continue with next batch even if one fails
+                    continue
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in Finnhub news collection: {str(e)}")
+            self._finnhub_consecutive_failures += 1
+            
+            if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
+                logger.error(f"Finnhub news collection failed {self._finnhub_consecutive_failures} times. Disabling for this session.")
+                self._finnhub_disabled_for_session = True
+            
+            return {symbol: [] for symbol in symbols}
+    
+    def _get_newsapi_news_for_symbols(self, symbols: List[str]) -> Dict[str, List[Dict]]:
+        """Get news from NewsAPI for multiple symbols with error handling"""
+        if self._newsapi_disabled_for_session:
+            return {symbol: [] for symbol in symbols}
+            
+        try:
+            result = {symbol: [] for symbol in symbols}
+            
+            # Build a query that includes all symbols
+            query = " OR ".join(symbols)
+            
+            # Get news from NewsAPI
+            articles = self.get_newsapi_news(query=query, hours_back=24)
+            
+            # Categorize articles by symbol
+            for article in articles:
+                # Check which symbols are mentioned in the article
+                for symbol in symbols:
+                    if symbol in article.get('title', '') or symbol in article.get('description', ''):
+                        result[symbol].append({
+                            'source': article.get('source', {}).get('name', 'Unknown'),
+                            'headline': article.get('title', 'No title'),
+                            'summary': article.get('description', ''),
+                            'url': article.get('url', ''),
+                            'published_at': article.get('publishedAt', ''),
+                            'content': article.get('content', '')
+                        })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in NewsAPI news collection: {str(e)}")
+            self._newsapi_consecutive_failures += 1
+            
+            if self._newsapi_consecutive_failures >= self._newsapi_failure_threshold:
+                logger.error(f"NewsAPI news collection failed {self._newsapi_consecutive_failures} times. Disabling for this session.")
+                self._newsapi_disabled_for_session = True
+            
+            return {symbol: [] for symbol in symbols}
 
 # Create a global instance of NewsCollector
 news_collector = NewsCollector()
