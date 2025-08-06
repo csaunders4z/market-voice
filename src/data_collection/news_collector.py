@@ -1,26 +1,23 @@
 """
 News collection for Market Voices
 Handles market and business news from multiple sources
-ENHANCED: Now includes comprehensive free news source scraping
+ENHANCED: Now includes comprehensive free news source scraping and caching
 """
-import requests
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
-import logging
-logger = logging.getLogger(__name__)
 import os
+import re
+import json
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any, Tuple
 import pytz
+import requests
+from loguru import logger
 
 from src.config.settings import get_settings
+from src.utils.cache import cached, api_cache
 
-# Import our new free news scraper
-try:
-    from .stock_news_scraper import stock_news_scraper
-    FREE_NEWS_AVAILABLE = True
-    logger.info("✅ Free news scraper available")
-except ImportError as e:
-    FREE_NEWS_AVAILABLE = False
-    logger.warning(f"⚠️  Free news scraper not available: {e}")
+# Free news scraper will be imported lazily when needed
+FREE_NEWS_AVAILABLE = True
 
 
 from .finnhub_news_adapter import finnhub_news_adapter
@@ -71,8 +68,9 @@ class NewsCollector:
         from_time = market_now - timedelta(hours=hours_back)
         return from_time, market_now
         
+    @cached(ttl_hours=12, key_prefix="newsapi")
     def get_newsapi_news(self, query: str = "NASDAQ", hours_back: int = 24) -> List[Dict]:
-        """Get news from NewsAPI with global circuit breaker/session disable logic"""
+        """Get news from NewsAPI with global circuit breaker/session disable logic and caching"""
         if self._newsapi_disabled_for_session:
             logger.error(f"NewsAPI disabled for this session after {self._newsapi_failure_threshold} consecutive failures. Skipping all NewsAPI requests.")
             return []
@@ -135,6 +133,7 @@ class NewsCollector:
             logger.error(f"Error fetching NewsAPI data: {str(e)}")
             return []
     
+    @cached(ttl_hours=12, key_prefix="biztoc")
     def get_biztoc_news(self, query: str = "NASDAQ", hours_back: int = 24, company: Optional[str] = None) -> List[Dict]:
         """Get business news from Biztoc via RapidAPI with enhanced content and company support"""
         if not self.rapidapi_key or self.rapidapi_key == "DUMMY":
@@ -201,8 +200,9 @@ class NewsCollector:
             logger.error(f"Error fetching Biztoc data: {str(e)}")
             return []
     
+    @cached(ttl_hours=12, key_prefix="newsdata")
     def get_newsdata_news(self, query: str = "NASDAQ", hours_back: int = 24, company: Optional[str] = None) -> List[Dict]:
-        """Get news from NewsData.io with enhanced content and company support, with global circuit breaker/session disable logic"""
+        """Get news from NewsData.io with enhanced content and company support, with global circuit breaker/session disable logic and caching"""
         if self._newsdata_disabled_for_session:
             logger.error(f"NewsData.io disabled for this session after {self._newsdata_failure_threshold} consecutive failures. Skipping all NewsData.io requests.")
             return []
@@ -230,6 +230,8 @@ class NewsCollector:
             for article in unique_articles.values():
                 title = article.get('title', '')
                 description = article.get('description', '')
+                content = article.get('content', '')
+                published_at = article.get('published_at', '')
                 full_text = f"{description}\n{content}" if content else description
                 processed_articles.append({
                     'title': title,
@@ -252,8 +254,9 @@ class NewsCollector:
             logger.error(f"Error fetching NewsData.io data: {str(e)}")
             return []
     
+    @cached(ttl_hours=12, key_prefix="thenewsapi")
     def get_the_news_api_news(self, query: str = "NASDAQ", hours_back: int = 24, company: Optional[str] = None) -> List[Dict]:
-        """Get news from The News API with enhanced content and company support"""
+        """Get news from The News API with enhanced content and company support with caching"""
         if not self.the_news_api_api_key or self.the_news_api_api_key == "DUMMY":
             logger.info("No The News API key provided, skipping The News API news")
             return []
@@ -285,6 +288,8 @@ class NewsCollector:
                     title = article.get('title', '')
                     description = article.get('description', '')
                     snippet = article.get('snippet', '')
+                    published_at = article.get('published_at', '')
+                    categories = article.get('categories', [])
                     
                     # Combine available text
                     full_text = f"{description}\n{snippet}".strip()
@@ -296,7 +301,7 @@ class NewsCollector:
                         'full_text': full_text,
                         'url': article.get('url', ''),
                         'source': article.get('source', ''),
-                        'author': '',  # The News API doesn't provide author
+                        'author': article.get('author', ''),  # Use author if available
                         'published_at': published_at,
                         'category': categories,
                         'relevance_score': self._calculate_relevance_score(article, query),
@@ -1185,3 +1190,6 @@ class NewsCollector:
         
         logger.info(f"Filtered to {len(today_articles)} today's articles from {len(articles)} total articles")
         return today_articles
+
+# Create a global instance of NewsCollector
+news_collector = NewsCollector()

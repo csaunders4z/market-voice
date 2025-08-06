@@ -105,3 +105,4 @@ Thumbs.db
 
 # Do not ignore requirements.txt
 !requirements.txt
+.aider*

@@ -1,21 +1,22 @@
 """
 Unified data collector for Market Voices
-Manages multiple data sources with fallback logic
+Manages multiple data sources with fallback logic and caching
 """
-import time
-from typing import List, Dict, Optional, Tuple
-from datetime import datetime
-from loguru import logger
 import os
-import yfinance as yf
+import json
+import time
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Tuple, Any
+import logging
 
 from src.config.settings import get_settings
-from src.utils.rate_limiter import api_rate_limiter, rate_limiter
+from src.utils.rate_limiter import rate_limiter
 from src.data_collection.fmp_stock_data import fmp_stock_collector
 from src.data_collection.news_collector import news_collector
 from .economic_calendar import economic_calendar
 from .free_news_sources import free_news_collector
 from .symbol_loader import symbol_loader
+from .market_data_cache import market_data_cache, cache_market_data
 
 
 class UnifiedDataCollector:
@@ -406,6 +407,33 @@ class UnifiedDataCollector:
             })
         
         return cached_data
+    
+    @cache_market_data(ttl_hours=12)
+    def collect_market_data(self, symbols: Optional[List[str]] = None) -> Dict:
+        """
+        Collect market data for the given symbols with caching.
+        
+        Args:
+            symbols: List of stock symbols to collect data for. If None, uses default symbols.
+            
+        Returns:
+            Dictionary of stock data keyed by symbol
+        """
+        logger.info("Collecting market data...")
+        
+        # Use provided symbols or get from FMP
+        if symbols is None:
+            symbols = fmp_stock_collector.symbols[:self.settings.max_symbols_per_collection]
+            
+        # Get stock data from the best available source
+        success, stock_data, source = self._get_best_stock_data(symbols)
+        
+        if not success:
+            logger.error("Failed to collect market data from all sources")
+            return {}
+            
+        logger.info(f"Collected market data for {len(stock_data)} stocks from {source}")
+        return stock_data
     
     def collect_data(self, symbols: List[str] = None, production_mode: bool = True) -> Dict:
         """Collect data from multiple sources with fallback and rate limiting"""

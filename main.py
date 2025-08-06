@@ -58,13 +58,27 @@ class MarketVoicesApp:
         
     def _run_security_audit(self):
         """Run security audit before starting"""
+        import sys
+        import io
+        
+        # Set up stdout to handle Unicode characters in Windows
+        if sys.platform == 'win32':
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        
         audit_results = security_config.run_security_audit()
         
         if audit_results['recommendations']:
-            print("\n⚠️  SECURITY WARNINGS:")
-            for rec in audit_results['recommendations']:
-                print(f"  - {rec}")
-            print()
+            try:
+                print("\n⚠️  SECURITY WARNINGS:")
+                for rec in audit_results['recommendations']:
+                    print(f"  - {rec}")
+                print()
+            except UnicodeEncodeError:
+                # Fallback for terminals that can't handle Unicode
+                print("\n[!] SECURITY WARNINGS:")
+                for rec in audit_results['recommendations']:
+                    print(f"  - {rec.encode('ascii', 'replace').decode('ascii')}")
+                print()
         
         # Log audit results
         logger = get_logger("Security")
