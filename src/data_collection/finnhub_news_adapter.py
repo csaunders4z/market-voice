@@ -35,53 +35,76 @@ class FinnhubNewsAdapter:
         """Get company-specific news from Finnhub."""
         if self._check_disabled():
             return []
+            
         try:
             url = f"{self.base_url}/company-news"
+            market_now = datetime.now(self.market_tz)
+            
+            # Default to 7 days lookback if no specific dates provided
             if not from_date:
-                market_now = datetime.now(self.market_tz)
-                from_date = (market_now - timedelta(days=2)).strftime('%Y-%m-%d')
+                from_date = (market_now - timedelta(days=7)).strftime('%Y-%m-%d')
             if not to_date:
-                market_now = datetime.now(self.market_tz)
                 to_date = market_now.strftime('%Y-%m-%d')
-            params = {"symbol": symbol, "from": from_date, "to": to_date, "token": self.api_key}
-            response = requests.get(url, params=params, timeout=10)
+                
+            logger.debug(f"Fetching news for {symbol} from {from_date} to {to_date}")
+            
+            params = {"symbol": symbol, 
+                     "from": from_date, 
+                     "to": to_date, 
+                     "token": self.api_key}
+            
+            response = requests.get(url, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
+            
             if not data or not isinstance(data, list):
-                logger.warning(f"No news data for {symbol} from Finnhub.")
+                logger.warning(f"No valid news data for {symbol} from Finnhub. Response: {data}")
                 self._finnhub_news_consecutive_failures += 1
                 if self._finnhub_news_consecutive_failures >= self._finnhub_news_failure_threshold:
                     self._finnhub_news_disabled_for_session = True
                     logger.error(f"Finnhub News API disabled for the remainder of this session after {self._finnhub_news_failure_threshold} consecutive failures.")
                 return []
-            self._finnhub_news_consecutive_failures = 0
-            # Sort by datetime, filter today's articles in market timezone
-            market_now = datetime.now(self.market_tz)
-            today_market = market_now.date()
-            today_articles = []
+                
+            logger.debug(f"Received {len(data)} raw articles for {symbol}")
+            self._finnhub_news_consecutive_failures = 0  # Reset on successful response
+            
+            # Sort by datetime (newest first)
+            data.sort(key=lambda x: x.get('datetime', 0), reverse=True)
+            
+            # Filter for recent articles (last 14 days max) and format
+            recent_articles = []
+            cutoff_date = (market_now - timedelta(days=14)).date()
             
             for article in data:
                 timestamp = article.get("datetime", 0)
-                if timestamp:
-                    article_date = datetime.fromtimestamp(timestamp, tz=pytz.UTC)
-                    article_date_market = article_date.astimezone(self.market_tz)
+                if not timestamp:
+                    continue
                     
-                    if article_date_market.date() == today_market:
-                        today_articles.append({
-                            "title": article.get("headline"),
-                            "description": article.get("summary"),
-                            "url": article.get("url"),
-                            "source": article.get("source"),
-                            "published_at": article.get("datetime"),
-                            "relevance_score": 8.0
-                        })
-            return today_articles[:limit]
-        except Exception as e:
+                article_date = datetime.fromtimestamp(timestamp, tz=pytz.UTC)
+                article_date_market = article_date.astimezone(self.market_tz)
+                
+                if article_date_market.date() >= cutoff_date:
+                    recent_articles.append({
+                        "title": article.get("headline", ""),
+                        "description": article.get("summary", ""),
+                        "url": article.get("url", ""),
+                        "source": article.get("source", "Finnhub"),
+                        "published_at": article_date_market.isoformat(),
+                        "relevance_score": 8.0 if article_date_market.date() == market_now.date() else 6.0
+                    })
+            
+            logger.debug(f"Found {len(recent_articles)} recent articles for {symbol}")
+            return recent_articles[:limit]
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error fetching Finnhub news for {symbol}: {str(e)}")
             self._finnhub_news_consecutive_failures += 1
             if self._finnhub_news_consecutive_failures >= self._finnhub_news_failure_threshold:
                 self._finnhub_news_disabled_for_session = True
-                logger.error(f"Finnhub News API disabled for the remainder of this session after {self._finnhub_news_failure_threshold} consecutive failures (exception path).")
-            logger.error(f"Finnhub news fetch failed for {symbol}: {str(e)}")
+                logger.error(f"Finnhub News API disabled for the remainder of this session after {self._finnhub_news_failure_threshold} consecutive failures.")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error in Finnhub news for {symbol}: {str(e)}", exc_info=True)
             return []
 
     def get_news_sentiment(self, symbol: str) -> Dict:

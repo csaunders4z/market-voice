@@ -194,287 +194,75 @@ class ScriptGenerator:
 
         
     def create_script_prompt(self, market_data: Dict, lead_host: str) -> str:
-        """Create the prompt for script generation with enhanced analysis"""
+        """
+        Create the prompt for script generation with enhanced analysis
+        """
+        # Get base prompt with instructions
+        base_prompt = self._get_base_script_prompt(lead_host)
         
-        # Get host information
-        lead_host_info = self.get_host_info(lead_host)
-        supporting_host = 'marcus' if lead_host == 'suzanne' else 'suzanne'
-        supporting_host_info = self.get_host_info(supporting_host)
-
-        # Format market data with enhanced information
-        winners = market_data.get('winners', [])
-        losers = market_data.get('losers', [])
-        summary = market_data.get('market_summary', {})
-        
-        # Get news data for integration (keeping for backward compatibility)
-        news_data = market_data.get('news_data', {})
-        market_news = news_data.get('market_analysis', '')
-        company_news = news_data.get('company_analysis', {})
-        
-        # Format winners and losers with enhanced data and news integration
-        winners_text = ""
-        for i, stock in enumerate(winners, 1):
-            symbol = stock.get('symbol', '')
-            company_name = stock.get('company_name', symbol)
-            current_price = stock.get('current_price', 0)
-            percent_change = stock.get('percent_change', 0)
-            volume_ratio = stock.get('volume_ratio', 1.0)
-            
-            # Enhanced data
-            earnings_data = stock.get('earnings_data')
-            analyst_data = stock.get('analyst_data')
-            insider_data = stock.get('insider_data')
-            price_target = stock.get('price_target')
-            
-            # ENHANCED: Get news articles directly from stock data
-            news_articles = stock.get('news_articles', [])
-            news_analysis = stock.get('news_analysis', '')
-            news_sources = stock.get('news_sources', [])
-            
-            # Format news information for the prompt
-            news_info = ""
-            if news_articles:
-                news_info += f"   Recent News Articles ({len(news_articles)} total):\n"
-                
-                catalysts = []
-                for j, article in enumerate(news_articles[:3], 1):  # Top 3 articles
-                    title = article.get('title', '')
-                    source = article.get('source', 'Unknown')
-                    published_at = article.get('published_at', '')
-                    news_info += f"   {j}. {title} ({source}) - {published_at}\n"
-                    
-                    if article.get('catalyst_type'):
-                        catalysts.append(article['catalyst_type'])
-                
-                if catalysts:
-                    unique_catalysts = list(set(catalysts))
-                    news_info += f"   Identified Catalysts: {', '.join(unique_catalysts)}\n"
-            
-            if news_analysis:
-                analysis_text = news_analysis
-                if len(analysis_text) > 300:
-                    truncated = analysis_text[:300]
-                    last_period = truncated.rfind('.')
-                    if last_period > 200:  # Only truncate at sentence if reasonable length
-                        analysis_text = truncated[:last_period + 1]
-                    else:
-                        analysis_text = truncated + "..."
-                
-                news_info += f"   News Analysis: {analysis_text}\n"
-            elif news_articles:
-                # Generate a brief summary from article titles if no analysis available
-                titles = [article.get('title', '') for article in news_articles[:3] if article.get('title')]
-                if titles:
-                    news_info += f"   Key Headlines: {'; '.join(titles)}\n"
-            
-            winners_text += f"\n{i}. {symbol} ({company_name}): ${current_price} (+{percent_change:.2f}%)\n"
-            winners_text += f"   Volume: {volume_ratio:.1f}x average\n"
-            
-            if earnings_data:
-                winners_text += f"   Next Earnings: {earnings_data.get('date', 'N/A')}\n"
-            
-            if analyst_data:
-                consensus = analyst_data.get('consensus', 'hold')
-                winners_text += f"   Analyst Consensus: {consensus.upper()}\n"
-            
-            if price_target:
-                winners_text += f"   Price Target: ${price_target:.2f}\n"
-            
-            if insider_data and insider_data.get('activity_level') == 'high':
-                net_activity = insider_data.get('net_activity', 'neutral')
-                winners_text += f"   Insider Activity: {net_activity.upper()}\n"
-            
-            if news_info:
-                winners_text += news_info
-        
-        losers_text = ""
-        for i, stock in enumerate(losers, 1):
-            symbol = stock.get('symbol', '')
-            company_name = stock.get('company_name', symbol)
-            current_price = stock.get('current_price', 0)
-            percent_change = stock.get('percent_change', 0)
-            volume_ratio = stock.get('volume_ratio', 1.0)
-            
-            # Enhanced data
-            earnings_data = stock.get('earnings_data')
-            analyst_data = stock.get('analyst_data')
-            insider_data = stock.get('insider_data')
-            price_target = stock.get('price_target')
-            
-            # ENHANCED: Get news articles directly from stock data
-            news_articles = stock.get('news_articles', [])
-            news_analysis = stock.get('news_analysis', '')
-            news_sources = stock.get('news_sources', [])
-            
-            # Format news information for the prompt
-            news_info = ""
-            if news_articles:
-                news_info += f"   Recent News Articles ({len(news_articles)} total):\n"
-                
-                catalysts = []
-                for j, article in enumerate(news_articles[:3], 1):  # Top 3 articles
-                    title = article.get('title', '')
-                    source = article.get('source', 'Unknown')
-                    published_at = article.get('published_at', '')
-                    news_info += f"   {j}. {title} ({source}) - {published_at}\n"
-                    
-                    if article.get('catalyst_type'):
-                        catalysts.append(article['catalyst_type'])
-                
-                if catalysts:
-                    unique_catalysts = list(set(catalysts))
-                    news_info += f"   Identified Catalysts: {', '.join(unique_catalysts)}\n"
-            
-            if news_analysis:
-                analysis_text = news_analysis
-                if len(analysis_text) > 300:
-                    truncated = analysis_text[:300]
-                    last_period = truncated.rfind('.')
-                    if last_period > 200:  # Only truncate at sentence if reasonable length
-                        analysis_text = truncated[:last_period + 1]
-                    else:
-                        analysis_text = truncated + "..."
-                
-                news_info += f"   News Analysis: {analysis_text}\n"
-            elif news_articles:
-                # Generate a brief summary from article titles if no analysis available
-                titles = [article.get('title', '') for article in news_articles[:3] if article.get('title')]
-                if titles:
-                    news_info += f"   Key Headlines: {'; '.join(titles)}\n"
-            
-            losers_text += f"\n{i}. {symbol} ({company_name}): ${current_price} ({percent_change:.2f}%)\n"
-            losers_text += f"   Volume: {volume_ratio:.1f}x average\n"
-            
-            if earnings_data:
-                losers_text += f"   Next Earnings: {earnings_data.get('date', 'N/A')}\n"
-            
-            if analyst_data:
-                consensus = analyst_data.get('consensus', 'hold')
-                losers_text += f"   Analyst Consensus: {consensus.upper()}\n"
-            
-            if price_target:
-                losers_text += f"   Price Target: ${price_target:.2f}\n"
-            
-            if insider_data and insider_data.get('activity_level') == 'high':
-                net_activity = insider_data.get('net_activity', 'neutral')
-                losers_text += f"   Insider Activity: {net_activity.upper()}\n"
-            
-            if news_info:
-                losers_text += news_info
-        
-        # Get economic calendar data
-        economic_calendar = market_data.get('market_summary', {}).get('economic_calendar', {})
-        economic_context = ""
-        
-        if economic_calendar:
-            fed_meetings = economic_calendar.get('fed_meetings', [])
-            immediate_events = economic_calendar.get('immediate_events', [])
-            
-            if fed_meetings:
-                next_meeting = fed_meetings[0] if fed_meetings else None
-                if next_meeting:
-                    days_until = next_meeting.get('days_until', 0)
-                    if days_until <= 7:
-                        economic_context += f"Fed meeting in {days_until} days. "
-                    elif days_until <= 30:
-                        economic_context += f"Fed meeting in {days_until} days. "
-            
-            if immediate_events:
-                economic_context += f"Key events this week: {len(immediate_events)} market-moving events. "
-        
-        # Get enhanced news analysis (paid sources)
-        enhanced_news = market_data.get('market_summary', {}).get('enhanced_news', {})
-        news_analysis = ""
-        if enhanced_news and enhanced_news.get('collection_success'):
-            market_analysis = enhanced_news.get('market_analysis', {})
-            if market_analysis.get('analysis_text'):
-                news_analysis = f"\nMARKET ANALYSIS FROM NEWS SOURCES:\n{market_analysis.get('analysis_text', '')[:1500]}...\n"
-            company_analysis = enhanced_news.get('company_analysis', {})
-            if company_analysis:
-                news_analysis += f"\nCOMPANY-SPECIFIC ANALYSIS AVAILABLE FOR: {list(company_analysis.keys())}\n"
-        
-        # Get free news analysis (free sources)
-        free_news = market_data.get('market_summary', {}).get('free_news', {})
-        free_news_text = ""
-        if free_news and free_news.get('articles'):
-            free_news_text = "\nFREE NEWS HEADLINES:\n"
-            for article in free_news['articles'][:5]:
-                free_news_text += f"- {article.get('title', '')} ({article.get('source', '')})\n"
-        
-        # Enhanced market summary
+        # Get enhanced market summary
         market_summary = market_data.get('market_summary', {})
+        enhanced_summary = market_summary.get('enhanced_summary', 'No market summary available')
         
-        # Get coverage statistics for both indices
-        total_target_symbols = market_summary.get('total_target_symbols', 0)
-        nasdaq100_count = len(symbol_loader.get_nasdaq_100_symbols())
-        sp500_count = len(symbol_loader.get_sp_500_symbols())
-        coverage_percentage = market_summary.get('coverage_percentage', 0)
+        # Get top movers
+        top_movers = market_data.get('top_movers', {})
+        winners = top_movers.get('winners', [])
+        losers = top_movers.get('losers', [])
         
-        # Determine market coverage description
-        sp500_coverage_val = market_summary.get('sp500_coverage', 0)
-        nasdaq100_coverage_val = market_summary.get('nasdaq100_coverage', 0)
-        if sp500_count > 0 and nasdaq100_count > 0:
-            market_coverage_desc = f"Analyzing {sp500_count} S&P 500 and {nasdaq100_count} NASDAQ-100 stocks ({coverage_percentage:.1f}% coverage)"
-        elif sp500_count > 0:
-            market_coverage_desc = f"Analyzing {sp500_count} S&P 500 stocks"
-        elif nasdaq100_count > 0:
-            market_coverage_desc = f"Analyzing {nasdaq100_count} NASDAQ-100 stocks"
-        elif sp500_coverage_val > 0 and nasdaq100_coverage_val > 0:
-            market_coverage_desc = f"Analyzing {sp500_coverage_val} S&P 500 and {nasdaq100_coverage_val} NASDAQ-100 stocks (coverage from market_summary)"
-        elif sp500_coverage_val > 0:
-            market_coverage_desc = f"Analyzing {sp500_coverage_val} S&P 500 stocks (coverage from market_summary)"
-        elif nasdaq100_coverage_val > 0:
-            market_coverage_desc = f"Analyzing {nasdaq100_coverage_val} NASDAQ-100 stocks (coverage from market_summary)"
-        else:
-            market_coverage_desc = market_summary.get('market_coverage', 'Analyzing major US stocks including NASDAQ-100 and S&P 500')
+        # Format winners and losers
+        winners_text = '\n'.join([
+            f"- {mover.get('symbol', '?')}: {mover.get('change_percent', 0):.2f}%"
+            for mover in winners[:5]
+        ]) if winners else "No significant gainers"
         
-        enhanced_summary = f"""
-MARKET OVERVIEW:
-- Market Analysis: {market_coverage_desc}
-- Stocks analyzed: {market_summary.get('total_stocks_analyzed', 0)} out of {total_target_symbols} total target stocks
-- S&P 500 coverage: {sp500_count} stocks
-- NASDAQ-100 coverage: {nasdaq100_count} stocks
-- Advancing: {market_summary.get('advancing_stocks', 0)}, Declining: {market_summary.get('declining_stocks', 0)}
-- Average change: {market_summary.get('average_change', 0):.2f}%
-- Market sentiment: {market_summary.get('market_sentiment', 'Mixed')}
-- Data source: {market_summary.get('data_source', 'Unknown')}
-- Economic context: {economic_context}
-{news_analysis}
-{free_news_text}
-"""
+        losers_text = '\n'.join([
+            f"- {mover.get('symbol', '?')}: {mover.get('change_percent', 0):.2f}%"
+            for mover in losers[:5]
+        ]) if losers else "No significant decliners"
         
-        # Foundational Prompt Approach:
-        # Load the foundational script generation prompt from planning/script_generation_requirements.md.
-        # This file defines the style, tone, and overall rules for script generation.
-        # At runtime, we amend this foundational prompt with current market data, news, and analysis.
-        foundational_prompt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../planning/script_generation_requirements.md'))
-        try:
-            with open(foundational_prompt_path, 'r', encoding='utf-8') as prompt_file:
-                base_prompt = prompt_file.read()
-                logger.info(f"Loaded foundational prompt from {foundational_prompt_path}")
-        except Exception as e:
-            logger.warning(f"Could not load foundational prompt from {foundational_prompt_path}: {e}. Using fallback prompt.")
-            base_prompt = (
-                "You are writing a professional financial news script for Market Voices. "
-                "The script must include both hosts, top 5 gainers and losers, and be natural, engaging, and data-driven. "
-                "Alternate hosts, use provided data only, and maintain a professional tone."
-            )
-        # Amend the foundational prompt with daily market data and analysis
-        # (This logic can be further refined as needed)
-        prompt = f"""{base_prompt}\n\n---\n\nTODAY'S MARKET DATA:\n{enhanced_summary}\n\nTOP 5 WINNERS:\n{winners_text}\n\nTOP 5 LOSERS:\n{losers_text}\n\n(Use all provided data and follow the foundational prompt above. Do not invent information. Write a natural, flowing script alternating hosts as described.)\n"""
         # Calculate coverage for S&P 500 and NASDAQ-100
+        from src.data_collection.symbol_loader import SymbolLoader
+        symbol_loader = SymbolLoader()
         sp500_expected = len(symbol_loader.get_sp_500_symbols())
         nasdaq100_expected = len(symbol_loader.get_nasdaq_100_symbols())
+        
         sp500_coverage = market_summary.get('sp500_coverage', 0)
         nasdaq100_coverage = market_summary.get('nasdaq100_coverage', 0)
+        
         # Fallback: if market_summary does not have coverage, use analyzed counts
         if not sp500_coverage:
             sp500_coverage = market_summary.get('sp500_analyzed', 0) or 0
         if not nasdaq100_coverage:
             nasdaq100_coverage = market_summary.get('nasdaq100_analyzed', 0) or 0
-        # Error handling for insufficient coverage
+        
+        # Check for sufficient coverage - treat as fatal error if not met
         if sp500_coverage < sp500_expected or nasdaq100_coverage < nasdaq100_expected:
-            logger.warning(f'Insufficient index coverage for script generation. S&P 500: {sp500_coverage}/{sp500_expected}, NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected}')
+            error_msg = (
+                f"Insufficient index coverage for script generation. "
+                f"S&P 500: {sp500_coverage}/{sp500_expected} ({(sp500_coverage/sp500_expected*100):.1f}%), "
+                f"NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected} ({(nasdaq100_coverage/nasdaq100_expected*100):.1f}%). "
+                "This is a critical error. Please check data collection logs for issues."
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
+        # Amend the foundational prompt with daily market data and analysis
+        prompt = f"""{base_prompt}
+
+---
+
+TODAY'S MARKET DATA:
+{enhanced_summary}
+
+TOP 5 WINNERS:
+{winners_text}
+
+TOP 5 LOSERS:
+{losers_text}
+
+(Use all provided data and follow the foundational prompt above. Do not invent information. Write a natural, flowing script alternating hosts as described.)
+"""
+        
         return prompt
 
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:

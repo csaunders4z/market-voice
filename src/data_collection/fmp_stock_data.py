@@ -24,16 +24,83 @@ class FMPStockDataCollector:
         self.api_key = self.settings.fmp_api_key
         self.symbols = []  # Will be populated dynamically
         self.base_url = "https://financialmodelingprep.com/api/v3"
+        
+        # Initialize cache directory first
+        self.cache_dir = Path("data/cache")
+        self.cache_dir.mkdir(parents=True, exist_ok=True) 
+        self.symbol_cache_file = self.cache_dir / "nasdaq100_symbols.json"
+        
+        # Now load the symbols
         self._load_nasdaq_100_symbols()
         
-        # Cache directory for persistent storage
-        self.cache_dir = Path("data/cache")
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.symbol_cache_file = self.cache_dir / "nasdaq100_symbols.json"
-
     def _redact_apikey(self, url: str) -> str:
         """Redact the apikey query parameter in a URL for logging"""
-        return re.sub(r'(apikey=)[^&]+', r'\1[REDACTED]', url)
+        if not url or not isinstance(url, str):
+            return url
+        return re.sub(r'(?i)(apikey=)[^&]+', r'\1[REDACTED]', url)
+
+    def _log_request(self, method: str, url: str, **kwargs):
+        """Log API requests with redacted API key"""
+        redacted_url = self._redact_apikey(url)
+        logger.debug(f"API Request: {method} {redacted_url}")
+        if 'params' in kwargs and kwargs['params']:
+            logger.debug(f"Request params: {kwargs['params']}")
+            
+    def _log_response(self, response):
+        """Log API responses with redacted sensitive data"""
+        try:
+            redacted_url = self._redact_apikey(response.url)
+            status = getattr(response, 'status_code', 'N/A')
+            logger.debug(f"API Response: {status} {redacted_url}")
+            
+            # For errors, log more details but still redact sensitive info
+            if status >= 400:
+                try:
+                    error_data = response.json()
+                    logger.error(f"API Error: {error_data.get('error', 'Unknown error')}")
+                except:
+                    logger.error(f"API Error: {response.text[:200]}...")
+        except Exception as e:
+            logger.warning(f"Error logging response: {str(e)}")
+
+    def _load_nasdaq_100_symbols(self):
+        """Dynamically load the current NASDAQ-100 symbols from FMP API with caching"""
+        # Try to load from cache first
+        cached_symbols = self._load_cached_symbols()
+        if cached_symbols:
+            self.symbols = cached_symbols
+            return
+            
+        # If cache miss or stale, fetch from API
+        try:
+            url = f"{self.base_url}/nasdaq_constituent"
+            params = {"apikey": self.api_key}
+            
+            self._log_request("GET", url, params=params)
+            response = requests.get(url, params=params, timeout=10)
+            self._log_response(response)
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            if data and isinstance(data, list):
+                symbols = [item.get('symbol', '') for item in data if item.get('symbol')]
+                self.symbols = symbols
+                logger.info(f"Loaded {len(symbols)} NASDAQ-100 symbols from FMP API")
+                logger.debug(f"First 10 symbols: {symbols[:10]}")
+                
+                # Save to cache for future use
+                self._save_symbols_to_cache(symbols)
+            else:
+                logger.warning("Failed to load NASDAQ-100 symbols, using fallback list")
+                self._use_fallback_symbols()
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching NASDAQ-100 symbols: {str(e)}")
+            self._use_fallback_symbols()
+        except Exception as e:
+            logger.error(f"Unexpected error loading symbols: {str(e)}")
+            self._use_fallback_symbols()
 
     def _load_cached_symbols(self) -> Optional[List[str]]:
         """Load symbols from cache if valid"""
@@ -68,65 +135,101 @@ class FMPStockDataCollector:
             logger.warning(f"Failed to save symbols to cache: {str(e)}")
 
     @api_rate_limiter.fmp_request
-    def _load_nasdaq_100_symbols(self):
-        """Dynamically load the current NASDAQ-100 symbols from FMP API with caching"""
-        # Try to load from cache first
-        cached_symbols = self._load_cached_symbols()
-        if cached_symbols:
-            self.symbols = cached_symbols
-            return
-            
-        # If cache miss or stale, fetch from API
+    def _fetch_historical_data(self, symbol: str, days: int = 30) -> List[Dict]:
+        """Fetch historical price data for technical analysis"""
         try:
-            url = f"{self.base_url}/nasdaq_constituent?apikey={self.api_key}"
-            response = requests.get(url, timeout=10)
+            url = f"{self.base_url}/historical-price-full/{symbol}"
+            params = {"apikey": self.api_key}
+            
+            self._log_request("GET", url, params=params)
+            response = requests.get(url, params=params, timeout=15)
+            self._log_response(response)
+            
             response.raise_for_status()
             data = response.json()
             
-            if data and isinstance(data, list):
-                symbols = [item.get('symbol', '') for item in data if item.get('symbol')]
-                self.symbols = symbols
-                logger.info(f"Loaded {len(symbols)} NASDAQ-100 symbols from FMP API")
-                logger.debug(f"First 10 symbols: {symbols[:10]}")
-                
-                # Save to cache for future use
-                self._save_symbols_to_cache(symbols)
-            else:
-                logger.warning("Failed to load NASDAQ-100 symbols, using fallback list")
-                self._use_fallback_symbols()
-                
+            if not data or 'historical' not in data:
+                logger.debug(f"No historical data found for {symbol}")
+                return []
+            
+            historical = data['historical'][:days]  # Get last N days
+            return historical
+            
         except requests.exceptions.RequestException as e:
-            redacted_url = self._redact_apikey(url)
-            logger.error(f"Error loading NASDAQ-100 symbols: {str(e)} | URL: {redacted_url}")
-            logger.info("Using fallback symbol list")
-            self._use_fallback_symbols()
+            logger.error(f"Error fetching historical data for {symbol}: {str(e)}")
+            return []
         except Exception as e:
-            logger.error(f"Unexpected error loading NASDAQ-100 symbols: {str(e)}")
-            self._use_fallback_symbols()
+            logger.error(f"Unexpected error fetching historical data for {symbol}: {str(e)}")
+            return []
 
-    def _use_fallback_symbols(self):
-        """Use a comprehensive fallback list of current S&P 500 and NASDAQ-100 stocks"""
-        fallback_symbols = [
-            "MSFT", "AAPL", "AMZN", "GOOGL", "GOOG", "META", "TSLA", "NVDA", "BRK-B", "JPM",
-            "V", "JNJ", "PG", "UNH", "MA", "HD", "DIS", "BAC", "PFE", "VZ", "CMCSA", "INTC",
-            "CSCO", "PEP", "ADBE", "NFLX", "PYPL", "ABT", "TMO", "NKE", "COST", "MRK", "ABBV",
-            "TXN", "ACN", "HON", "NEE", "PM", "UNP", "LOW", "ORCL", "LIN", "SBUX", "AMGN",
-            "MDT", "T", "CVX", "QCOM", "DHR", "BMY", "TGT", "USB", "CHTR", "GILD", "INTU",
-            "AMT", "ISRG", "GS", "LMT", "BKNG", "LRCX", "ADP", "TJX", "DE", "ADI", "MDLZ",
-            "REGN", "VRTX", "FISV", "CSX", "ILMN", "MU", "ATVI", "ADSK", "BIIB", "MELI",
-            "KLAC", "SNPS", "CDNS", "MCHP", "ASML", "AEP", "DXCM", "CTAS", "WDAY", "EXC",
-            "MRNA", "KDP", "KHC", "LULU", "EA", "CRWD", "TEAM", "MTCH", "DOCU", "OKTA",
-            "ZM", "PTON", "ROKU", "DDOG", "FTNT", "TTD", "ZS", "NET", "SQ", "SE", "SHOP"
-        ]
+    @api_rate_limiter.fmp_request
+    def fetch_stock_data(self, symbol: str) -> Optional[Dict]:
+        """Fetch data for a single stock symbol from FMP with technical indicators and additional data"""
+        url = f"{self.base_url}/quote/{symbol}"
+        params = {"apikey": self.api_key}
         
-        # Add common index symbols
-        fallback_symbols.extend(["SPY", "QQQ", "DIA", "IWM", "VTI", "VOO", "IVV", "VEA", "VWO"])
-        
-        self.symbols = list(dict.fromkeys(fallback_symbols))  # Remove duplicates while preserving order
-        logger.info(f"Using fallback list of {len(self.symbols)} symbols")
-        
-        # Save to cache to avoid repeated fallback on subsequent runs
-        self._save_symbols_to_cache(self.symbols)
+        try:
+            self._log_request("GET", url, params=params)
+            response = requests.get(url, params=params, timeout=10)
+            self._log_response(response)
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            if not data or not isinstance(data, list):
+                logger.warning(f"No data returned for {symbol}")
+                return None
+            
+            info = data[0]
+            
+            # Calculate volume ratio
+            current_volume = info.get('volume', 0)
+            avg_volume = info.get('avgVolume', 1)  # Avoid division by zero
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+            
+            # Fetch historical data for technical indicators
+            historical_data = self._fetch_historical_data(symbol, 30)
+            prices = [float(item['close']) for item in historical_data] if historical_data else []
+            
+            # Calculate technical indicators
+            rsi = self._calculate_rsi(prices) if len(prices) >= 15 else 50.0
+            macd_data = self._calculate_macd(prices) if len(prices) >= 26 else {"macd": 0, "signal": 0, "histogram": 0, "crossover": None}
+            
+            # Determine technical signals
+            technical_signals = []
+            if rsi > 70:
+                technical_signals.append("RSI overbought")
+            elif rsi < 30:
+                technical_signals.append("RSI oversold")
+            
+            if volume_ratio > 2:
+                technical_signals.append("High volume")
+            
+            if macd_data.get('crossover'):
+                technical_signals.append(f"MACD {macd_data['crossover']} crossover")
+            
+            return {
+                'symbol': info.get('symbol', symbol),
+                'company_name': info.get('name', symbol),
+                'current_price': info.get('price', 0),
+                'previous_price': info.get('previousClose', 0),
+                'price_change': info.get('change', 0),
+                'percent_change': info.get('changesPercentage', 0),
+                'current_volume': current_volume,
+                'average_volume': avg_volume,
+                'volume_ratio': volume_ratio,
+                'market_cap': info.get('marketCap', 0),
+                'rsi': rsi,
+                'macd_signal': macd_data.get('crossover'),
+                'technical_signals': technical_signals,
+                'timestamp': datetime.now().isoformat()
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching data for {symbol}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching data for {symbol}: {str(e)}")
+            return None
 
     def _calculate_rsi(self, prices: List[float], period: int = 14) -> float:
         """Calculate RSI (Relative Strength Index)"""
@@ -179,96 +282,6 @@ class FMPStockDataCollector:
             "histogram": float(histogram),
             "crossover": crossover
         }
-
-    @api_rate_limiter.fmp_request
-    def _fetch_historical_data(self, symbol: str, days: int = 30) -> List[Dict]:
-        """Fetch historical price data for technical analysis"""
-        try:
-            url = f"{self.base_url}/historical-price-full/{symbol}?apikey={self.api_key}"
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            
-            if not data or 'historical' not in data:
-                return []
-            
-            historical = data['historical'][:days]  # Get last N days
-            return historical
-            
-        except Exception as e:
-            logger.error(f"Error fetching historical data for {symbol}: {str(e)}")
-            return []
-
-    @api_rate_limiter.fmp_request
-    def fetch_stock_data(self, symbol: str) -> Optional[Dict]:
-        """Fetch data for a single stock symbol from FMP with technical indicators and additional data"""
-        try:
-            # Fetch current quote
-            url = f"{self.base_url}/quote/{symbol}?apikey={self.api_key}"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            if not data or not isinstance(data, list):
-                logger.warning(f"No data returned for {symbol}")
-                return None
-            
-            info = data[0]
-            
-            # Calculate volume ratio
-            current_volume = info.get('volume', 0)
-            avg_volume = info.get('avgVolume', 1)  # Avoid division by zero
-            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
-            
-            # Fetch historical data for technical indicators
-            historical_data = self._fetch_historical_data(symbol, 30)
-            prices = [float(item['close']) for item in historical_data] if historical_data else []
-            
-            # Calculate technical indicators
-            rsi = self._calculate_rsi(prices) if len(prices) >= 15 else 50.0
-            macd_data = self._calculate_macd(prices) if len(prices) >= 26 else {"macd": 0, "signal": 0, "histogram": 0, "crossover": None}
-            
-            # Determine technical signals
-            technical_signals = []
-            if rsi > 70:
-                technical_signals.append("RSI overbought")
-            elif rsi < 30:
-                technical_signals.append("RSI oversold")
-            
-            if volume_ratio > 2:
-                technical_signals.append("High volume")
-            
-            if macd_data.get('crossover'):
-                technical_signals.append(f"MACD {macd_data['crossover']} crossover")
-            
-            return {
-                'symbol': info.get('symbol', symbol),
-                'company_name': info.get('name', symbol),
-                'current_price': info.get('price', 0),
-                'previous_price': info.get('previousClose', 0),
-                'price_change': info.get('change', 0),
-                'percent_change': info.get('changesPercentage', 0),
-                'current_volume': current_volume,
-                'average_volume': avg_volume,
-                'volume_ratio': volume_ratio,
-                'market_cap': info.get('marketCap', 0),
-                'rsi': rsi,
-                'macd_signal': macd_data.get('crossover'),
-                'technical_signals': technical_signals,
-                'timestamp': datetime.now().isoformat()
-            }
-        except Exception as e:
-            redacted_url = self._redact_apikey(url)
-            error_str = str(e)
-            if '429' in error_str or 'Too Many Requests' in error_str:
-                logger.warning(f"Rate limit hit for {symbol}: {error_str}")
-            elif '401' in error_str or '403' in error_str or 'Unauthorized' in error_str:
-                logger.error(f"Authorization error for {symbol}: {error_str}")
-            elif '500' in error_str or '502' in error_str or '503' in error_str:
-                logger.error(f"Server error for {symbol}: {error_str}")
-            else:
-                logger.error(f"Error fetching FMP data for {symbol}: {error_str} | URL: {redacted_url}")
-            return None
 
     def collect_data(self) -> List[Dict]:
         """Collect data for all symbols with optimized rate limiting and error handling"""
@@ -324,6 +337,34 @@ class FMPStockDataCollector:
             "average_change": avg_change,
             "total_stocks": total
         }
+
+    def _use_fallback_symbols(self):
+        """Use a comprehensive fallback list of current S&P 500 and NASDAQ-100 stocks"""
+        fallback_symbols = [
+            "MSFT", "AAPL", "AMZN", "GOOGL", "GOOG", "META", "TSLA", "NVDA", "BRK-B", "JPM",
+            "V", "JNJ", "PG", "UNH", "MA", "HD", "DIS", "BAC", "PFE", "VZ", "CMCSA", "INTC",
+            "CSCO", "PEP", "ADBE", "NFLX", "PYPL", "ABT", "TMO", "NKE", "COST", "MRK", "ABBV",
+            "TXN", "ACN", "HON", "NEE", "PM", "UNP", "LOW", "ORCL", "LIN", "SBUX", "AMGN",
+            "MDT", "T", "CVX", "QCOM", "DHR", "BMY", "TGT", "USB", "CHTR", "GILD", "INTU",
+            "AMT", "ISRG", "GS", "LMT", "BKNG", "LRCX", "ADP", "TJX", "DE", "ADI", "MDLZ",
+            "REGN", "VRTX", "FISV", "CSX", "ILMN", "MU", "ATVI", "ADSK", "BIIB", "MELI",
+            "KLAC", "SNPS", "CDNS", "MCHP", "ASML", "AEP", "DXCM", "CTAS", "WDAY", "EXC",
+            "MRNA", "KDP", "KHC", "LULU", "EA", "CRWD", "TEAM", "MTCH", "DOCU", "OKTA",
+            "ZM", "PTON", "ROKU", "DDOG", "FTNT", "TTD", "ZS", "NET", "SQ", "SE", "SHOP"
+        ]
+        
+        # Add common index symbols
+        fallback_symbols.extend(["SPY", "QQQ", "DIA", "IWM", "VTI", "VOO", "IVV", "VEA", "VWO"])
+        
+        self.symbols = list(dict.fromkeys(fallback_symbols))  # Remove duplicates while preserving order
+        logger.info(f"Using fallback list of {len(self.symbols)} symbols")
+        
+        # Only save to cache if symbol_cache_file is defined
+        if hasattr(self, 'symbol_cache_file') and self.symbol_cache_file:
+            try:
+                self._save_symbols_to_cache(self.symbols)
+            except Exception as e:
+                logger.warning(f"Failed to save fallback symbols to cache: {str(e)}")
 
 # Global instance
 fmp_stock_collector = FMPStockDataCollector()

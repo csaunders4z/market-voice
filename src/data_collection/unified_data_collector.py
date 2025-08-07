@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Any
 import logging
+import yfinance as yf
 from ..utils.logger import get_logger
 
 # Initialize logger
@@ -124,11 +125,17 @@ class UnifiedDataCollector:
     def _collect_yf_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:
         """Collect data from Yahoo Finance with rate limiting and enhanced data"""
         try:
+            # Check if yfinance is available
+            try:
+                import yfinance as yf
+            except ImportError:
+                logger.error("yfinance package not installed. Please install it with: pip install yfinance")
+                return False, [], "Yahoo Finance - Package not installed"
+                
             logger.info("Attempting to collect data from Yahoo Finance...")
             
             all_data = []
             
-            # Use batch processing for Yahoo Finance
             def fetch_yahoo_stock(symbol: str) -> Optional[Dict]:
                 try:
                     ticker = yf.Ticker(symbol)
@@ -137,6 +144,7 @@ class UnifiedDataCollector:
                     # Get current price data
                     hist = ticker.history(period="2d")
                     if len(hist) < 2:
+                        logger.warning(f"Insufficient historical data for {symbol}")
                         return None
                     
                     current_price = hist['Close'].iloc[-1]
@@ -147,86 +155,30 @@ class UnifiedDataCollector:
                     current_volume = hist['Volume'].iloc[-1]
                     avg_volume = info.get('averageVolume', current_volume)
                     
+                    # Get company name, default to symbol if not available
                     company_name = info.get('longName', symbol)
                     
-                    # Get earnings calendar data
-                    earnings_data = None
-                    try:
-                        calendar = ticker.calendar
-                        if calendar is not None and hasattr(calendar, 'empty') and not calendar.empty:
-                            next_earnings = calendar.iloc[0] if len(calendar) > 0 else None
-                            if next_earnings is not None:
-                                earnings_data = {
-                                    'date': next_earnings.get('Earnings Date', ''),
-                                    'estimate': next_earnings.get('EPS Estimate', None),
-                                    'actual': next_earnings.get('EPS Actual', None),
-                                    'revenue_estimate': next_earnings.get('Revenue Estimate', None),
-                                    'revenue_actual': next_earnings.get('Revenue Actual', None)
-                                }
-                    except Exception as e:
-                        logger.debug(f"Could not fetch earnings calendar for {symbol}: {str(e)}")
+                    # Get market cap
+                    market_cap = info.get('marketCap', 0)
                     
-                    # Get analyst recommendations
-                    analyst_data = None
-                    try:
-                        recommendations = ticker.recommendations
-                        if recommendations is not None and hasattr(recommendations, 'empty') and not recommendations.empty:
-                            recent_recs = recommendations.tail(5)  # Last 5 recommendations
-                            if not recent_recs.empty:
-                                # Count recommendations
-                                rec_counts = recent_recs['To Grade'].value_counts()
-                                buy_count = rec_counts.get('Buy', 0) + rec_counts.get('Strong Buy', 0)
-                                hold_count = rec_counts.get('Hold', 0)
-                                sell_count = rec_counts.get('Sell', 0) + rec_counts.get('Strong Sell', 0)
-                                
-                                # Determine consensus
-                                total = buy_count + hold_count + sell_count
-                                if total > 0:
-                                    if buy_count > hold_count and buy_count > sell_count:
-                                        consensus = 'buy'
-                                    elif sell_count > hold_count and sell_count > buy_count:
-                                        consensus = 'sell'
-                                    else:
-                                        consensus = 'hold'
-                                else:
-                                    consensus = 'hold'
-                                
-                                analyst_data = {
-                                    'consensus': consensus,
-                                    'ratings_count': {
-                                        'buy': buy_count,
-                                        'hold': hold_count,
-                                        'sell': sell_count
-                                    },
-                                    'recent_recommendations': recent_recs.tail(3).to_dict('records') if len(recent_recs) >= 3 else recent_recs.to_dict('records')
-                                }
-                    except Exception as e:
-                        logger.debug(f"Could not fetch analyst recommendations for {symbol}: {str(e)}")
+                    # Calculate RSI (simplified)
+                    rsi = 50.0  # Default neutral value
                     
-                    # Get price targets
-                    price_target = None
-                    try:
-                        price_target = info.get('targetMeanPrice')
-                    except:
-                        pass
-                    
+                    # Create the stock data dictionary
                     stock_data = {
                         'symbol': symbol,
                         'company_name': company_name,
-                        'current_price': round(current_price, 2),
-                        'previous_price': round(previous_price, 2),
-                        'price_change': round(price_change, 2),
-                        'percent_change': round(percent_change, 2),
-                        'current_volume': current_volume,
-                        'average_volume': avg_volume,
-                        'volume_ratio': round(current_volume / avg_volume, 2) if avg_volume > 0 else 1.0,
-                        'market_cap': info.get('marketCap', 0),
-                        'rsi': 50.0,  # Default neutral RSI
+                        'current_price': round(float(current_price), 2),
+                        'previous_price': round(float(previous_price), 2),
+                        'price_change': round(float(price_change), 2),
+                        'percent_change': round(float(percent_change), 2),
+                        'current_volume': int(current_volume),
+                        'average_volume': int(avg_volume) if avg_volume else 0,
+                        'volume_ratio': round(float(current_volume / avg_volume), 2) if avg_volume and avg_volume > 0 else 1.0,
+                        'market_cap': int(market_cap) if market_cap else 0,
+                        'rsi': rsi,
                         'macd_signal': None,
                         'technical_signals': [],
-                        'earnings_data': earnings_data,
-                        'analyst_data': analyst_data,
-                        'price_target': price_target,
                         'timestamp': datetime.now().isoformat()
                     }
                     
@@ -237,23 +189,31 @@ class UnifiedDataCollector:
                     return None
             
             # Process symbols in batches with rate limiting
-            all_data = rate_limiter.batch_process(
-                items=symbols,
-                batch_size=self.settings.yahoo_batch_size,
-                batch_delay=self.settings.yahoo_batch_delay,
-                process_func=fetch_yahoo_stock,
-                api_name="Yahoo Finance"
-            )
-            
-            if all_data:
-                logger.info(f"Yahoo Finance collection successful: {len(all_data)} stocks")
-                return True, all_data, "Yahoo Finance"
-            else:
-                logger.warning("Yahoo Finance collection returned no data")
-                return False, [], "Yahoo Finance - No data"
+            batch_size = 10
+            for i in range(0, len(symbols), batch_size):
+                batch = symbols[i:i + batch_size]
+                batch_results = []
                 
+                for symbol in batch:
+                    stock_data = fetch_yahoo_stock(symbol)
+                    if stock_data:
+                        batch_results.append(stock_data)
+                
+                all_data.extend(batch_results)
+                
+                # Add delay between batches to respect rate limits
+                if i + batch_size < len(symbols):
+                    time.sleep(1)  # 1 second delay between batches
+            
+            if not all_data:
+                logger.warning("No data collected from Yahoo Finance")
+                return False, [], "Yahoo Finance - No data collected"
+                
+            logger.info(f"Successfully collected data for {len(all_data)}/{len(symbols)} symbols from Yahoo Finance")
+            return True, all_data, "Yahoo Finance"
+            
         except Exception as e:
-            logger.error(f"Yahoo Finance collection failed: {str(e)}")
+            logger.error(f"Error in Yahoo Finance collection: {str(e)}")
             return False, [], f"Yahoo Finance - {str(e)}"
     
     def _collect_av_data(self, symbols: List[str]) -> Tuple[bool, List[Dict], str]:

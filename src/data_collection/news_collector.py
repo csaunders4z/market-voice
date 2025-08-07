@@ -19,8 +19,8 @@ from src.utils.cache import cached, api_cache
 # Free news scraper will be imported lazily when needed
 FREE_NEWS_AVAILABLE = True
 
-
-from .finnhub_news_adapter import finnhub_news_adapter
+# Update import to use absolute path
+from src.data_collection.finnhub_news_adapter import finnhub_news_adapter
 
 class NewsCollector:
     """Collects market and business news from multiple sources, including Finnhub"""
@@ -1664,29 +1664,34 @@ class NewsCollector:
             return {symbol: [] for symbol in symbols}
             
         try:
-            from finnhub_news_adapter import finnhub_news_adapter
+            from src.data_collection.finnhub_news_adapter import finnhub_news_adapter
             
-            result = {}
+            result = {symbol: [] for symbol in symbols}
             
-            # Process symbols in batches to avoid rate limits
-            for i in range(0, len(symbols), 5):  # Process 5 symbols at a time
-                batch = symbols[i:i+5]
-                
+            # Process each symbol individually
+            for symbol in symbols:
                 try:
-                    # Use the finnhub_news_adapter to get news for this batch
-                    batch_news = finnhub_news_adapter.get_news_for_symbols(batch)
+                    # Get company news for this symbol
+                    articles = finnhub_news_adapter.get_company_news(symbol)
                     
-                    # Merge results
-                    for symbol, articles in batch_news.items():
-                        result[symbol] = articles
+                    if articles:
+                        # Format articles to match expected structure
+                        formatted_articles = []
+                        for article in articles:
+                            formatted_articles.append({
+                                'headline': article.get('title', ''),
+                                'source': article.get('source', 'Unknown'),
+                                'url': article.get('url', ''),
+                                'published_at': article.get('published_at', ''),
+                                'content': article.get('description', '')
+                            })
+                        result[symbol] = formatted_articles
                     
-                    # Be nice to the API
-                    if i + 5 < len(symbols):
-                        time.sleep(1)  # 1 second between batches
+                    # Be nice to the API - small delay between requests
+                    time.sleep(0.5)
                         
                 except Exception as e:
-                    logger.warning(f"Error fetching Finnhub news for batch {i//5 + 1}: {str(e)}")
-                    # Continue with next batch even if one fails
+                    logger.warning(f"Error fetching Finnhub news for {symbol}: {str(e)}")
                     continue
             
             return result
@@ -1698,36 +1703,49 @@ class NewsCollector:
             if self._finnhub_consecutive_failures >= self._finnhub_failure_threshold:
                 logger.error(f"Finnhub news collection failed {self._finnhub_consecutive_failures} times. Disabling for this session.")
                 self._finnhub_disabled_for_session = True
-            
+                
             return {symbol: [] for symbol in symbols}
     
     def _get_newsapi_news_for_symbols(self, symbols: List[str]) -> Dict[str, List[Dict]]:
-        """Get news from NewsAPI for multiple symbols with error handling"""
+        """Get news from NewsAPI for multiple symbols with error handling and batching"""
         if self._newsapi_disabled_for_session:
             return {symbol: [] for symbol in symbols}
             
         try:
             result = {symbol: [] for symbol in symbols}
             
-            # Build a query that includes all symbols
-            query = " OR ".join(symbols)
+            # Batch symbols into smaller groups to avoid URL length limits
+            batch_size = 10  # Number of symbols per batch
+            symbol_batches = [symbols[i:i + batch_size] for i in range(0, len(symbols), batch_size)]
             
-            # Get news from NewsAPI
-            articles = self.get_newsapi_news(query=query, hours_back=24)
-            
-            # Categorize articles by symbol
-            for article in articles:
-                # Check which symbols are mentioned in the article
-                for symbol in symbols:
-                    if symbol in article.get('title', '') or symbol in article.get('description', ''):
-                        result[symbol].append({
-                            'source': article.get('source', {}).get('name', 'Unknown'),
-                            'headline': article.get('title', 'No title'),
-                            'summary': article.get('description', ''),
-                            'url': article.get('url', ''),
-                            'published_at': article.get('publishedAt', ''),
-                            'content': article.get('content', '')
-                        })
+            for batch in symbol_batches:
+                # Build a query that includes symbols from this batch
+                query = " OR ".join(batch)
+                
+                try:
+                    # Get news from NewsAPI for this batch
+                    articles = self.get_newsapi_news(query=query, hours_back=24)
+                    
+                    # Categorize articles by symbol
+                    for article in articles:
+                        # Check which symbols are mentioned in the article
+                        article_text = f"{article.get('title', '')} {article.get('description', '')} {article.get('content', '')}"
+                        
+                        for symbol in batch:
+                            # Simple check if symbol is mentioned in the article
+                            if symbol.lower() in article_text.lower():
+                                result[symbol].append({
+                                    'headline': article.get('title', ''),
+                                    'source': article.get('source', ''),
+                                    'url': article.get('url', ''),
+                                    'published_at': article.get('published_at', ''),
+                                    'content': article.get('content', '')
+                                })
+                                break  # Add article only to the first matching symbol
+                
+                except Exception as e:
+                    logger.error(f"Error processing NewsAPI batch: {str(e)}")
+                    continue  # Continue with next batch even if one fails
             
             return result
             
