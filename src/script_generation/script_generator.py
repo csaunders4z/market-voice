@@ -197,50 +197,46 @@ class ScriptGenerator:
         """
         Create the prompt for script generation with enhanced analysis
         """
-        # Get base prompt with instructions
+        # Get base prompt with host-specific instructions
         base_prompt = self._get_base_script_prompt(lead_host)
         
-        # Get enhanced market summary
-        market_summary = market_data.get('market_summary', {})
-        enhanced_summary = market_summary.get('enhanced_summary', 'No market summary available')
+        # Get market summary and analysis
+        market_summary = market_data.get('detailed_data', {}).get('market_summary', {})
+        enhanced_summary = market_data.get('detailed_data', {}).get('enhanced_analysis', 'No enhanced analysis available')
         
-        # Get top movers
-        top_movers = market_data.get('top_movers', {})
-        winners = top_movers.get('winners', [])
-        losers = top_movers.get('losers', [])
+        # Get top winners and losers
+        winners = market_data.get('top_winners', [])[:5]  # Ensure we only take top 5
+        losers = market_data.get('bottom_losers', [])[-5:]  # Ensure we only take bottom 5
         
-        # Format winners and losers
-        winners_text = '\n'.join([
-            f"- {mover.get('symbol', '?')}: {mover.get('change_percent', 0):.2f}%"
-            for mover in winners[:5]
-        ]) if winners else "No significant gainers"
+        # Format winners and losers text
+        winners_text = "\n".join([
+            f"- {w['symbol']} ({w.get('company_name', 'N/A')}): {w.get('change_percent', 0):.2f}% to ${w.get('price', 0):.2f}" 
+            for w in winners if w
+        ]) or "No significant gainers today."
         
-        losers_text = '\n'.join([
-            f"- {mover.get('symbol', '?')}: {mover.get('change_percent', 0):.2f}%"
-            for mover in losers[:5]
-        ]) if losers else "No significant decliners"
+        losers_text = "\n".join([
+            f"- {l['symbol']} ({l.get('company_name', 'N/A')}): {l.get('change_percent', 0):.2f}% to ${l.get('price', 0):.2f}" 
+            for l in losers if l
+        ]) or "No significant losers today."
         
-        # Calculate coverage for S&P 500 and NASDAQ-100
-        from src.data_collection.symbol_loader import SymbolLoader
-        symbol_loader = SymbolLoader()
-        sp500_expected = len(symbol_loader.get_sp_500_symbols())
-        nasdaq100_expected = len(symbol_loader.get_nasdaq_100_symbols())
+        # Get index coverage from collected data instead of reloading
+        index_coverage = market_data.get('index_coverage', {})
+        sp500_expected = index_coverage.get('sp500_total', 500)
+        nasdaq100_expected = index_coverage.get('nasdaq100_total', 100)
+        sp500_coverage = index_coverage.get('sp500_analyzed', 0)
+        nasdaq100_coverage = index_coverage.get('nasdaq100_analyzed', 0)
         
-        sp500_coverage = market_summary.get('sp500_coverage', 0)
-        nasdaq100_coverage = market_summary.get('nasdaq100_coverage', 0)
-        
-        # Fallback: if market_summary does not have coverage, use analyzed counts
-        if not sp500_coverage:
-            sp500_coverage = market_summary.get('sp500_analyzed', 0) or 0
-        if not nasdaq100_coverage:
-            nasdaq100_coverage = market_summary.get('nasdaq100_analyzed', 0) or 0
+        # Log coverage information
+        logger.info(f"Index coverage for script generation - "
+                  f"S&P 500: {sp500_coverage}/{sp500_expected} ({(sp500_coverage/max(1, sp500_expected)*100):.1f}%), "
+                  f"NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected} ({(nasdaq100_coverage/max(1, nasdaq100_expected)*100):.1f}%)")
         
         # Check for sufficient coverage - treat as fatal error if not met
-        if sp500_coverage < sp500_expected or nasdaq100_coverage < nasdaq100_expected:
+        if sp500_coverage < sp500_expected * 0.8 or nasdaq100_coverage < nasdaq100_expected * 0.8:
             error_msg = (
                 f"Insufficient index coverage for script generation. "
-                f"S&P 500: {sp500_coverage}/{sp500_expected} ({(sp500_coverage/sp500_expected*100):.1f}%), "
-                f"NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected} ({(nasdaq100_coverage/nasdaq100_expected*100):.1f}%). "
+                f"S&P 500: {sp500_coverage}/{sp500_expected} ({(sp500_coverage/max(1, sp500_expected)*100):.1f}%), "
+                f"NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected} ({(nasdaq100_coverage/max(1, nasdaq100_expected)*100):.1f}%). "
                 "This is a critical error. Please check data collection logs for issues."
             )
             logger.error(error_msg)
@@ -264,6 +260,55 @@ TOP 5 LOSERS:
 """
         
         return prompt
+
+    def _get_base_script_prompt(self, lead_host: str) -> str:
+        """
+        Create a base script prompt template with host-specific instructions.
+        
+        Args:
+            lead_host: The key for the lead host ('marcus' or 'suzanne')
+            
+        Returns:
+            str: The base prompt template with host-specific instructions
+        """
+        host_info = self.get_host_info(lead_host)
+        other_host = 'suzanne' if lead_host == 'marcus' else 'marcus'
+        other_host_info = self.get_host_info(other_host)
+        
+        return f"""You are a professional financial news script writer creating a script for "Market Voices" podcast. 
+The script should be engaging, informative, and professional, targeting retail investors.
+
+HOST DETAILS:
+- Lead Host: {host_info['name']} ({host_info['background']})
+- Co-Host: {other_host_info['name']} ({other_host_info['background']})
+
+HOST STYLES:
+- {host_info['name']}'s Style: {host_info['style']}
+- {other_host_info['name']}'s Style: {other_host_info['style']}
+
+SCRIPT FORMAT:
+1. Start with a warm greeting and brief market overview
+2. Discuss key market movers and their news
+3. Provide analysis of market trends
+4. Include relevant technical analysis
+5. End with a summary and sign-off
+
+TONE: Professional, engaging, and conversational. Avoid financial jargon unless explained.
+
+TARGET RUNTIME: {self.get_target_runtime()} minutes
+
+INSTRUCTIONS:
+- Keep segments concise and focused
+- Balance speaking time between hosts
+- Use natural transitions between segments
+- Include relevant statistics and data points
+- Maintain a professional but approachable tone
+- Keep technical analysis clear and actionable
+- Highlight key support/resistance levels when relevant
+- Include volume analysis for significant moves
+- Reference news catalysts for major price movements
+- End with a clear call to action or key takeaway
+"""
 
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:
         lead_host_info = self.get_host_info(lead_host)

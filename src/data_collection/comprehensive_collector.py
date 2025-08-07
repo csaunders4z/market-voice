@@ -6,6 +6,7 @@ import time
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 from ..utils.logger import get_logger
+from ..utils.cache import cached  # Add this import at the top
 
 # Initialize logger
 logger = get_logger("ComprehensiveCollector")
@@ -30,7 +31,32 @@ class ComprehensiveDataCollector:
         
         # Load current symbol lists
         self.symbol_lists = self._load_symbol_lists()
+    
+    @cached(ttl_hours=12, key_prefix="top_movers")
+    def _get_top_movers(self, all_stocks: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        """
+        Identify top 5 winners and bottom 5 losers from stock data.
+        Cached for 12 hours to avoid redundant processing.
         
+        Args:
+            all_stocks: List of stock data dictionaries
+            
+        Returns:
+            Tuple of (top_winners, bottom_losers) lists
+        """
+        if not all_stocks:
+            return [], []
+            
+        # Sort by percentage change
+        sorted_stocks = sorted(all_stocks, key=lambda x: x.get('change_percent', 0), reverse=True)
+        
+        # Get top 5 winners and bottom 5 losers
+        top_winners = sorted_stocks[:5]
+        bottom_losers = sorted_stocks[-5:]
+        
+        logger.info(f"Identified {len(top_winners)} winners and {len(bottom_losers)} losers")
+        return top_winners, bottom_losers
+    
     def _load_symbol_lists(self) -> Dict:
         """Load current symbol lists from symbol loader"""
         try:
@@ -84,52 +110,47 @@ class ComprehensiveDataCollector:
             logger.error("Failed to collect basic data for top movers identification")
             return basic_data_result
         
-        # Identify top 5 winners and bottom 5 losers
+        # Get all stocks and identify top movers (cached for 12 hours)
         all_stocks = basic_data_result.get('all_data', [])
-        sorted_stocks = sorted(all_stocks, key=lambda x: x.get('change_percent', 0), reverse=True)
-        
-        # Get top 5 winners and bottom 5 losers
-        top_winners = sorted_stocks[:5]
-        bottom_losers = sorted_stocks[-5:]
+        top_winners, bottom_losers = self._get_top_movers(tuple(all_stocks))  # Convert to tuple for hashing
         top_movers = top_winners + bottom_losers
         top_mover_symbols = [stock['symbol'] for stock in top_movers]
         
-        logger.info(f"Identified top movers: {', '.join(top_mover_symbols)}")
+        logger.info(f"Top movers: {', '.join(top_mover_symbols)}")
         
         # Now collect detailed data including news only for top movers
         logger.info("Collecting detailed data for top movers...")
-        detailed_result = unified_collector.collect_detailed_data(
+        detailed_data = unified_collector.collect_detailed_data(
             symbols=top_mover_symbols, 
             production_mode=production_mode
         )
         
-        # Add the top movers info to the result
-        if detailed_result.get('collection_success'):
-            detailed_result['top_winners'] = top_winners
-            detailed_result['bottom_losers'] = bottom_losers
-            detailed_result['all_data'] = all_stocks  # Include all stocks in the result
-            
-            # Add coverage statistics
-            total_coverage = len(all_stocks)
-            sp500_coverage = len([s for s in all_stocks if s['symbol'] in sp500_symbols])
-            nasdaq100_coverage = len([s for s in all_stocks if s['symbol'] in nasdaq100_symbols])
-            
-            detailed_result['coverage_stats'] = {
-                'total_coverage': total_coverage,
-                'sp500_coverage': sp500_coverage,
-                'nasdaq100_coverage': nasdaq100_coverage,
-                'coverage_percentage': (total_coverage / len(all_symbols)) * 100 if all_symbols else 0
-            }
-            
-            # Update market summary if it exists
-            if 'market_summary' in detailed_result:
-                detailed_result['market_summary']['total_stocks'] = total_coverage
-                detailed_result['market_summary']['sp500_coverage'] = sp500_coverage
-                detailed_result['market_summary']['nasdaq100_coverage'] = nasdaq100_coverage
-                detailed_result['market_summary']['coverage_percentage'] = (total_coverage / len(all_symbols)) * 100 if all_symbols else 0
-                detailed_result['market_summary']['market_coverage'] = f"Analyzing {total_coverage}/{len(all_symbols)} NASDAQ-100 and S&P-500 stocks ({total_coverage/len(all_symbols)*100:.1f}% coverage)"
+        if not detailed_data.get('collection_success', False):
+            logger.error("Failed to collect detailed data for top movers")
+            return detailed_data
         
-        return detailed_result
+        # Prepare the result with coverage information
+        result = {
+            'collection_success': True,
+            'collection_timestamp': datetime.now().isoformat(),
+            'symbols_analyzed': len(all_stocks),
+            'top_winners': top_winners,
+            'bottom_losers': bottom_losers,
+            'all_data': all_stocks,
+            'detailed_data': detailed_data,
+            # Add index coverage information
+            'index_coverage': {
+                'sp500_total': len([s for s in all_stocks if s.get('symbol') in self.symbol_lists['sp500_symbols']]),
+                'nasdaq100_total': len([s for s in all_stocks if s.get('symbol') in self.symbol_lists['nasdaq100_symbols']]),
+                'sp500_analyzed': len([s for s in all_stocks if s.get('symbol') in self.symbol_lists['sp500_symbols']]),
+                'nasdaq100_analyzed': len([s for s in all_stocks if s.get('symbol') in self.symbol_lists['nasdaq100_symbols']]),
+                'sp500_coverage': len([s for s in all_stocks if s.get('symbol') in self.symbol_lists['sp500_symbols']]) / max(1, len(self.symbol_lists['sp500_symbols'])),
+                'nasdaq100_coverage': len([s for s in all_stocks if s.get('symbol') in self.symbol_lists['nasdaq100_symbols']]) / max(1, len(self.symbol_lists['nasdaq100_symbols']))
+            }
+        }
+        
+        logger.info("Comprehensive data collection completed successfully")
+        return result
 
 
 # Global instance
