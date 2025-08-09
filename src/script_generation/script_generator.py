@@ -198,12 +198,30 @@ class ScriptGenerator:
         Create the prompt for script generation with enhanced analysis, news integration,
         and technical assessment for each stock.
         """
+        # Add detailed logging of input data structure
+        logger.info("=== Market Data Structure ===")
+        logger.info(f"Top level keys: {list(market_data.keys())}")
+        
+        if 'detailed_data' in market_data and market_data['detailed_data']:
+            logger.info(f"Detailed data keys: {list(market_data['detailed_data'].keys())}")
+            
+            if 'market_summary' in market_data['detailed_data']:
+                logger.info("Market summary available")
+                
+            if 'enhanced_analysis' in market_data['detailed_data']:
+                logger.info("Enhanced analysis available")
+        
         # Get base prompt with host-specific instructions
         base_prompt = self._get_base_script_prompt(lead_host)
         
         # Get market summary and analysis
         market_summary = market_data.get('detailed_data', {}).get('market_summary', {})
         enhanced_summary = market_data.get('detailed_data', {}).get('enhanced_analysis', 'No enhanced analysis available')
+        
+        # Log the type and content of market summary for debugging
+        logger.info(f"Market summary type: {type(market_summary)}")
+        if isinstance(market_summary, dict):
+            logger.info(f"Market summary keys: {list(market_summary.keys())}")
         
         # Get news data if available
         news_data = market_data.get('detailed_data', {}).get('news_data', {})
@@ -218,9 +236,17 @@ class ScriptGenerator:
         if not losers and 'detailed_data' in market_data:
             losers = market_data['detailed_data'].get('bottom_losers', [])
         
+        # Log the number of winners and losers found
+        logger.info(f"Found {len(winners)} winners and {len(losers)} losers")
+        
         def get_technical_analysis(stock: Dict) -> str:
             """Generate technical analysis for a stock based on available data."""
             analysis = []
+            
+            # Log the stock data structure for debugging
+            logger.info(f"Stock data for {stock.get('symbol', 'unknown')}:")
+            for key, value in stock.items():
+                logger.info(f"  {key}: {value}")
             
             # Price movement
             price = stock.get('price', 0)
@@ -231,9 +257,16 @@ class ScriptGenerator:
                 direction = "up" if pct_change >= 0 else "down"
                 analysis.append(f"- Price moved {direction} {abs(pct_change):.2f}% from ${prev_close:.2f} to ${price:.2f}")
             
-            # Volume analysis
+            # Volume analysis with fallback
             volume = stock.get('volume', 0)
             avg_volume = stock.get('average_volume', 0)
+            
+            # If volume data is missing, try to get it from alternative keys
+            if not volume and 'current_volume' in stock:
+                volume = stock['current_volume']
+            if not avg_volume and 'avg_volume' in stock:
+                avg_volume = stock['avg_volume']
+                
             if volume and avg_volume and avg_volume > 0:
                 volume_ratio = volume / avg_volume
                 if volume_ratio > 2.0:
@@ -243,24 +276,43 @@ class ScriptGenerator:
                 elif volume_ratio < 0.7:
                     analysis.append(f"- Lower than average trading volume ({volume_ratio:.1f}x average)")
             
-            # RSI if available
+            # RSI with fallback
             rsi = stock.get('rsi')
-            if rsi:
+            if rsi is None and 'technical_indicators' in stock and 'rsi' in stock['technical_indicators']:
+                rsi = stock['technical_indicators']['rsi']
+                
+            if rsi is not None:
+                rsi = float(rsi)  # Ensure it's a float
                 if rsi > 70:
                     analysis.append(f"- RSI at {rsi:.1f} indicates overbought conditions")
                 elif rsi < 30:
                     analysis.append(f"- RSI at {rsi:.1f} indicates oversold conditions")
+                else:
+                    analysis.append(f"- RSI at {rsi:.1f} shows neutral momentum")
             
-            # Moving Averages
+            # Moving Averages with fallbacks
             ma50 = stock.get('ma_50')
             ma200 = stock.get('ma_200')
+            
+            # Try alternative keys if standard ones aren't found
+            if ma50 is None and 'moving_averages' in stock and '50_day' in stock['moving_averages']:
+                ma50 = stock['moving_averages']['50_day']
+            if ma200 is None and 'moving_averages' in stock and '200_day' in stock['moving_averages']:
+                ma200 = stock['moving_averages']['200_day']
+            
             if ma50 and ma200 and price:
+                ma50 = float(ma50)
+                ma200 = float(ma200)
                 if price > ma50 > ma200:
                     analysis.append(f"- Price above both 50-day (${ma50:.2f}) and 200-day (${ma200:.2f}) moving averages")
                 elif price < ma50 < ma200:
                     analysis.append(f"- Price below both 50-day (${ma50:.2f}) and 200-day (${ma200:.2f}) moving averages")
                 elif ma50 > price > ma200:
                     analysis.append(f"- Price between 50-day (${ma50:.2f}) and 200-day (${ma200:.2f}) moving averages")
+                elif price > ma200 > ma50:
+                    analysis.append(f"- Price above 200-day MA (${ma200:.2f}) with golden cross pattern")
+                elif price < ma200 < ma50:
+                    analysis.append(f"- Price below 200-day MA (${ma200:.2f}) with death cross pattern")
             
             return "\n".join(analysis) if analysis else "- Limited technical data available"
         
@@ -398,8 +450,8 @@ SCRIPT GENERATION INSTRUCTIONS:
         other_host = 'suzanne' if lead_host == 'marcus' else 'marcus'
         other_host_info = self.get_host_info(other_host)
         
-        return f"""You are a professional financial news script writer creating a script for "Market Voices" podcast. 
-The script should be engaging, informative, and professional, targeting retail investors.
+        return f"""You are a professional financial news script writer creating a script for "Market Voices" financial news program that airs each evening after market close daily on YouTube, for investors looking for immediate market insights and analysis. 
+The script should be engaging, informative, and professional, targeting retail investors. However, you can also inject moments of levity between the hosts or small, polite jokes.
 
 HOST DETAILS:
 - Lead Host: {host_info['name']} ({host_info['background']})
@@ -421,7 +473,7 @@ TONE: Professional, engaging, and conversational. Avoid financial jargon unless 
 TARGET RUNTIME: {self.get_target_runtime()} minutes
 
 INSTRUCTIONS:
-- Keep segments concise and focused
+- Keep segments casually professional in tone
 - Balance speaking time between hosts
 - Use natural transitions between segments
 - Include relevant statistics and data points
@@ -429,8 +481,8 @@ INSTRUCTIONS:
 - Keep technical analysis clear and actionable
 - Highlight key support/resistance levels when relevant
 - Include volume analysis for significant moves
-- Reference news catalysts for major price movements
-- End with a clear call to action or key takeaway
+- Reference news catalysts for major price movements but do not cite individual news sources unless they are a major business publication like the Wall Street Journal or CNBC
+- End with a clear call to tune in during the next business day and like or subscribe to the channel if audiences enjoy the content
 """
 
     def _create_structured_script(self, script_text: str, lead_host: str) -> Dict:
@@ -665,11 +717,11 @@ QUALITY WARNINGS TO ADDRESS:
 {warnings_text}
 
 Please fix these issues and return an improved version of the script in the same JSON format. Focus on:
-1. Balancing speaking time between hosts (45-55% split)
+1. Balancing speaking time between hosts (40-60% split)
 2. Reducing repetitive phrases
 3. Improving transitions between segments
 4. Ensuring proper content length
-5. Maintaining professional financial news tone
+5. Maintaining casually professional financial news tone
 """
     
     def _add_missing_segments(self, script_data: Dict, market_data: Dict, lead_host: str) -> Dict:
