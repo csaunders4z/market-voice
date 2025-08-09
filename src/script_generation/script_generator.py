@@ -195,7 +195,8 @@ class ScriptGenerator:
         
     def create_script_prompt(self, market_data: Dict, lead_host: str) -> str:
         """
-        Create the prompt for script generation with enhanced analysis
+        Create the prompt for script generation with enhanced analysis, news integration,
+        and technical assessment for each stock.
         """
         # Get base prompt with host-specific instructions
         base_prompt = self._get_base_script_prompt(lead_host)
@@ -204,32 +205,142 @@ class ScriptGenerator:
         market_summary = market_data.get('detailed_data', {}).get('market_summary', {})
         enhanced_summary = market_data.get('detailed_data', {}).get('enhanced_analysis', 'No enhanced analysis available')
         
-        # Get top winners and losers
-        winners = market_data.get('top_winners', [])[:5]  # Ensure we only take top 5
-        losers = market_data.get('bottom_losers', [])[-5:]  # Ensure we only take bottom 5
+        # Get news data if available
+        news_data = market_data.get('detailed_data', {}).get('news_data', {})
         
-        # Format winners and losers text
-        winners_text = "\n".join([
-            f"- {w['symbol']} ({w.get('company_name', 'N/A')}): {w.get('change_percent', 0):.2f}% to ${w.get('price', 0):.2f}" 
-            for w in winners if w
-        ]) or "No significant gainers today."
+        # Get top winners and losers - check both root level and detailed_data
+        winners = market_data.get('top_winners', [])
+        losers = market_data.get('bottom_losers', [])
         
-        losers_text = "\n".join([
-            f"- {l['symbol']} ({l.get('company_name', 'N/A')}): {l.get('change_percent', 0):.2f}% to ${l.get('price', 0):.2f}" 
-            for l in losers if l
-        ]) or "No significant losers today."
+        # If not found at root, try detailed_data
+        if not winners and 'detailed_data' in market_data:
+            winners = market_data['detailed_data'].get('top_winners', [])
+        if not losers and 'detailed_data' in market_data:
+            losers = market_data['detailed_data'].get('bottom_losers', [])
         
-        # Get index coverage from collected data instead of reloading
+        def get_technical_analysis(stock: Dict) -> str:
+            """Generate technical analysis for a stock based on available data."""
+            analysis = []
+            
+            # Price movement
+            price = stock.get('price', 0)
+            prev_close = stock.get('previous_close', 0)
+            if prev_close and price:
+                change = price - prev_close
+                pct_change = (change / prev_close) * 100 if prev_close != 0 else 0
+                direction = "up" if pct_change >= 0 else "down"
+                analysis.append(f"- Price moved {direction} {abs(pct_change):.2f}% from ${prev_close:.2f} to ${price:.2f}")
+            
+            # Volume analysis
+            volume = stock.get('volume', 0)
+            avg_volume = stock.get('average_volume', 0)
+            if volume and avg_volume and avg_volume > 0:
+                volume_ratio = volume / avg_volume
+                if volume_ratio > 2.0:
+                    analysis.append(f"- Extremely heavy trading volume ({volume_ratio:.1f}x average)")
+                elif volume_ratio > 1.5:
+                    analysis.append(f"- Higher than average trading volume ({volume_ratio:.1f}x average)")
+                elif volume_ratio < 0.7:
+                    analysis.append(f"- Lower than average trading volume ({volume_ratio:.1f}x average)")
+            
+            # RSI if available
+            rsi = stock.get('rsi')
+            if rsi:
+                if rsi > 70:
+                    analysis.append(f"- RSI at {rsi:.1f} indicates overbought conditions")
+                elif rsi < 30:
+                    analysis.append(f"- RSI at {rsi:.1f} indicates oversold conditions")
+            
+            # Moving Averages
+            ma50 = stock.get('ma_50')
+            ma200 = stock.get('ma_200')
+            if ma50 and ma200 and price:
+                if price > ma50 > ma200:
+                    analysis.append(f"- Price above both 50-day (${ma50:.2f}) and 200-day (${ma200:.2f}) moving averages")
+                elif price < ma50 < ma200:
+                    analysis.append(f"- Price below both 50-day (${ma50:.2f}) and 200-day (${ma200:.2f}) moving averages")
+                elif ma50 > price > ma200:
+                    analysis.append(f"- Price between 50-day (${ma50:.2f}) and 200-day (${ma200:.2f}) moving averages")
+            
+            return "\n".join(analysis) if analysis else "- Limited technical data available"
+        
+        def get_company_news_analysis(symbol: str) -> Tuple[str, str]:
+            """Get news analysis for a company, returning both news items and a summary."""
+            if not news_data:
+                return "", ""
+                
+            company_news = news_data.get('company_news', {}).get(symbol, [])
+            news_summary = news_data.get('news_summaries', {}).get(symbol, "")
+            
+            # Format individual news items
+            news_items = []
+            if company_news:
+                for i, news in enumerate(company_news[:2], 1):  # Top 2 most recent news
+                    if isinstance(news, dict):
+                        source = news.get('source', {}).get('name', 'a news source') if isinstance(news.get('source'), dict) else news.get('source', 'a news source')
+                        news_items.append(f"  {i}. {news.get('title', '')} (Source: {source})")
+            
+            return "\n".join(news_items), news_summary
+        
+        def format_stock_analysis(stock: Dict) -> str:
+            """Format a comprehensive stock analysis including technicals and news."""
+            symbol = stock.get('symbol', 'N/A')
+            company_name = stock.get('company_name', stock.get('name', 'N/A'))
+            percent_change = stock.get('change_percent', stock.get('percent_change', 0))
+            price = stock.get('price', 0)
+            
+            # Get technical analysis
+            technicals = get_technical_analysis(stock)
+            
+            # Get news items and summary
+            news_items, news_summary = get_company_news_analysis(symbol)
+            
+            # Format the analysis
+            analysis = [
+                f"{symbol} ({company_name}): {float(percent_change):.2f}% to ${float(price):.2f}",
+                "Technical Analysis:",
+                technicals,
+                ""
+            ]
+            
+            if news_items or news_summary:
+                analysis.append("Recent News:")
+                if news_items:
+                    analysis.append(news_items)
+                if news_summary:
+                    analysis.append(f"\nNews Summary: {news_summary}")
+            else:
+                analysis.append("No significant news found.")
+            
+            return "\n".join(analysis)
+        
+        # Format winners and losers with comprehensive analysis
+        winners_analysis = "\n\n".join([format_stock_analysis(w) for w in winners if w]) or "No significant gainers today."
+        losers_analysis = "\n\n".join([format_stock_analysis(l) for l in losers if l]) or "No significant losers today."
+        
+        # Get market news summary if available
+        market_news_summary = ""
+        if news_data and 'market_news' in news_data and news_data['market_news']:
+            # Get top 2 most relevant market news items
+            top_market_news = sorted(
+                news_data['market_news'],
+                key=lambda x: x.get('relevance_score', 0) if isinstance(x, dict) else 0,
+                reverse=True
+            )[:2]
+            
+            if top_market_news:
+                market_news_summary = "\n\nMARKET NEWS HIGHLIGHTS:\n"
+                for i, news in enumerate(top_market_news, 1):
+                    if isinstance(news, dict):
+                        source = news.get('source', {}).get('name', 'a news source') if isinstance(news.get('source'), dict) else news.get('source', 'a news source')
+                        market_news_summary += f"{i}. {news.get('title', '')} (Source: {source})\n"
+        
+        # Get index coverage from collected data
         index_coverage = market_data.get('index_coverage', {})
         sp500_expected = index_coverage.get('sp500_total', 500)
         nasdaq100_expected = index_coverage.get('nasdaq100_total', 100)
         sp500_coverage = index_coverage.get('sp500_analyzed', 0)
         nasdaq100_coverage = index_coverage.get('nasdaq100_analyzed', 0)
-        
-        # Log coverage information
-        logger.info(f"Index coverage for script generation - "
-                  f"S&P 500: {sp500_coverage}/{sp500_expected} ({(sp500_coverage/max(1, sp500_expected)*100):.1f}%), "
-                  f"NASDAQ-100: {nasdaq100_coverage}/{nasdaq100_expected} ({(nasdaq100_coverage/max(1, nasdaq100_expected)*100):.1f}%)")
         
         # Check for sufficient coverage - treat as fatal error if not met
         if sp500_coverage < sp500_expected * 0.8 or nasdaq100_coverage < nasdaq100_expected * 0.8:
@@ -242,19 +353,31 @@ class ScriptGenerator:
             logger.error(error_msg)
             raise RuntimeError(error_msg)
         
-        # Amend the foundational prompt with daily market data and analysis
+        # Amend the foundational prompt with daily market data, news, and analysis
         prompt = f"""{base_prompt}
 
 ---
 
-TODAY'S MARKET DATA:
+TODAY'S MARKET OVERVIEW:
 {enhanced_summary}
 
-TOP 5 WINNERS:
-{winners_text}
+TOP GAINERS ANALYSIS:
+{winners_analysis}
 
-TOP 5 LOSERS:
-{losers_text}
+TOP LOSERS ANALYSIS:
+{losers_analysis}
+
+{market_news_summary}
+
+SCRIPT GENERATION INSTRUCTIONS:
+1. For each stock, analyze both the technical factors and news catalysts that contributed to its movement.
+2. Explain the price action in the context of both technical indicators and fundamental news.
+3. For significant movers, provide a clear narrative of what happened and likely why.
+4. When technicals and news align (e.g., positive news with strong volume), highlight this confluence.
+5. For stocks with significant moves but no clear news, focus on technical factors and potential market sentiment.
+6. Maintain a professional but engaging tone, explaining technical terms for a general audience.
+7. Keep each stock analysis concise but informative (2-4 sentences).
+8. Ensure smooth transitions between different stocks and market segments.
 
 (Use all provided data and follow the foundational prompt above. Do not invent information. Write a natural, flowing script alternating hosts as described.)
 """
