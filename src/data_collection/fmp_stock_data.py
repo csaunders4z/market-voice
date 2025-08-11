@@ -191,21 +191,29 @@ class FMPStockDataCollector:
             historical_data = self._fetch_historical_data(symbol, 30)
             prices = [float(item['close']) for item in historical_data] if historical_data else []
             
-            # Calculate technical indicators
-            rsi = self._calculate_rsi(prices) if len(prices) >= 15 else 50.0
-            macd_data = self._calculate_macd(prices) if len(prices) >= 26 else {"macd": 0, "signal": 0, "histogram": 0, "crossover": None}
+            # Calculate technical indicators only if we have enough data
+            rsi = None
+            macd_data = None
+            
+            if len(prices) >= 26:  # Enough data for MACD (26 periods)
+                rsi = self._calculate_rsi(prices)
+                macd_data = self._calculate_macd(prices)
+            elif len(prices) >= 14:  # Enough data for RSI (14 periods + 1 for comparison)
+                rsi = self._calculate_rsi(prices)
+                macd_data = {"macd": None, "signal": None, "histogram": None, "crossover": None}
+            else:
+                # Not enough data for any technical indicators
+                macd_data = {"macd": None, "signal": None, "histogram": None, "crossover": None}
             
             # Determine technical signals
             technical_signals = []
-            if rsi > 70:
-                technical_signals.append("RSI overbought")
-            elif rsi < 30:
-                technical_signals.append("RSI oversold")
+            if rsi is not None:
+                if rsi > 70:
+                    technical_signals.append("RSI overbought")
+                elif rsi < 30:
+                    technical_signals.append("RSI oversold")
             
-            if volume_ratio > 2:
-                technical_signals.append("High volume")
-            
-            if macd_data.get('crossover'):
+            if macd_data and macd_data.get('crossover'):
                 technical_signals.append(f"MACD {macd_data['crossover']} crossover")
             
             return {
@@ -234,7 +242,7 @@ class FMPStockDataCollector:
     def _calculate_rsi(self, prices: List[float], period: int = 14) -> float:
         """Calculate RSI (Relative Strength Index)"""
         if len(prices) < period + 1:
-            return 50.0  # Neutral RSI if insufficient data
+            return None  # Neutral RSI if insufficient data
         
         deltas = np.diff(prices)
         gains = np.where(deltas > 0, deltas, 0)
@@ -253,7 +261,7 @@ class FMPStockDataCollector:
     def _calculate_macd(self, prices: List[float]) -> Dict:
         """Calculate MACD (Moving Average Convergence Divergence)"""
         if len(prices) < 26:
-            return {"macd": 0, "signal": 0, "histogram": 0, "crossover": None}
+            return {"macd": None, "signal": None, "histogram": None, "crossover": None}
         
         # Calculate EMAs
         ema12 = np.mean(prices[-12:])  # Simplified EMA calculation

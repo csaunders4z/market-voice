@@ -161,10 +161,7 @@ class UnifiedDataCollector:
                     # Get market cap
                     market_cap = info.get('marketCap', 0)
                     
-                    # Calculate RSI (simplified)
-                    rsi = 50.0  # Default neutral value
-                    
-                    # Create the stock data dictionary
+                    # Create the stock data dictionary without any default RSI value
                     stock_data = {
                         'symbol': symbol,
                         'company_name': company_name,
@@ -174,13 +171,15 @@ class UnifiedDataCollector:
                         'percent_change': round(float(percent_change), 2),
                         'current_volume': int(current_volume),
                         'average_volume': int(avg_volume) if avg_volume else 0,
-                        'volume_ratio': round(float(current_volume / avg_volume), 2) if avg_volume and avg_volume > 0 else 1.0,
+                        'volume_ratio': round(float(current_volume / avg_volume), 2) if avg_volume and avg_volume > 0 else None,
                         'market_cap': int(market_cap) if market_cap else 0,
-                        'rsi': rsi,
-                        'macd_signal': None,
                         'technical_signals': [],
                         'timestamp': datetime.now().isoformat()
                     }
+                    
+                    # Only include RSI if we have a valid calculation
+                    # (This would come from a proper technical indicator calculation)
+                    # For now, we're not including any default RSI value
                     
                     return stock_data
                     
