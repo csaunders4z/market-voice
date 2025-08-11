@@ -253,7 +253,7 @@ class UnifiedDataCollector:
                     
                     # Parse quote data
                     current_price = float(quote.get('05. price', 0))
-                    previous_price = float(quote.get('08. previous close', current_price))
+                    previous_close = float(quote.get('08. previous close', current_price))
                     price_change = float(quote.get('09. change', 0))
                     percent_change = float(quote.get('10. change percent', '0%').replace('%', ''))
                     volume = int(quote.get('06. volume', 0))
@@ -274,16 +274,18 @@ class UnifiedDataCollector:
                     stock_data = {
                         'symbol': symbol,
                         'company_name': company_name,
-                        'current_price': round(current_price, 2),
-                        'previous_price': round(previous_price, 2),
-                        'price_change': round(price_change, 2),
-                        'percent_change': round(percent_change, 2),
+                        'current_price': round(float(current_price), 2) if current_price is not None else None,
+                        'previous_price': round(float(previous_close), 2) if previous_close is not None else None,
+                        'price_change': round(price_change, 2) if price_change is not None else 0.0,
+                        'percent_change': round(percent_change, 2) if percent_change is not None else 0.0,
                         'current_volume': volume,
                         'average_volume': volume,  # Alpha Vantage doesn't provide avg volume easily
                         'volume_ratio': 1.0,  # Default since we don't have avg volume
                         'market_cap': market_cap,
-                        'rsi': 50.0,  # Default neutral RSI
-                        'macd_signal': None,
+                        'technical_indicators': {
+                            # Only include RSI if we have a valid calculation from the API
+                            # Alpha Vantage provides RSI in their technical indicators
+                        },
                         'technical_signals': [],
                         'timestamp': datetime.now().isoformat()
                     }
