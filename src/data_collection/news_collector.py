@@ -551,42 +551,122 @@ class NewsCollector:
             logger.info(f"[COMPANY] Exit: _get_biztoc_company_news for {company}")
             print(f"[COMPANY] Exit: _get_biztoc_company_news for {company}")
     def _create_news_summary(self, articles: List[Dict], symbol: str) -> str:
-        """Create a comprehensive news summary from multiple articles"""
+        """Create a comprehensive news summary from multiple articles with enhanced content extraction
+        
+        Args:
+            articles: List of article dictionaries containing news data
+            symbol: Stock symbol being analyzed
+        
+        Returns:
+            str: A rich, detailed news summary with comprehensive content
+        """
         if not articles:
-            return ""
+            return f"No recent news found for {symbol}."
         
-        # Get the most relevant article
-        top_article = articles[0]
-        title = top_article.get('title', '')
-        source = top_article.get('source', '')
-        description = top_article.get('description', '')
+        # Sort articles by relevance/recency and word count (prioritize longer articles)
+        sorted_articles = sorted(
+            articles, 
+            key=lambda x: (
+                x.get('relevance_score', 0), 
+                x.get('word_count', 0),
+                x.get('published_at', '')
+            ), 
+            reverse=True
+        )
         
-        # Create a rich summary
+        # Get top 5 most relevant articles (increased from 3)
+        top_articles = sorted_articles[:5]
+        
+        # Initialize summary parts
         summary_parts = []
+        sources_used = set()
         
-        if title:
-            summary_parts.append(title)
+        # Add a header with the company/symbol
+        summary_parts.append(f"📰 *Latest Developments for {symbol}:*")
         
-        if description and len(description) > 20:
-            summary_parts.append(description[:200] + "..." if len(description) > 200 else description)
+        # Process each top article in detail
+        for i, article in enumerate(top_articles, 1):
+            title = article.get('title', '').strip()
+            description = article.get('description', '').strip()
+            content = article.get('content', '').strip()
+            source = article.get('source', '').strip()
+            url = article.get('url', '')
+            published_at = article.get('published_at', '')
+            
+            # Skip if no meaningful content
+            if not any([title, description, content]):
+                continue
+            
+            # Track sources for attribution
+            if source:
+                sources_used.add(source)
         
-        # Add source attribution
-        if source:
-            summary_parts.append(f"(Source: {source})")
+            # Start a new section for this article
+            article_parts = []
         
-        # Add additional context from other sources
-        if len(articles) > 1:
-            additional_sources = set()
-            for article in articles[1:4]:  # Next 3 articles
-                article_source = article.get('source', '')
-                if article_source and article_source != source:
-                    additional_sources.add(article_source)
-                
-            if additional_sources:
-                sources_text = ", ".join(list(additional_sources)[:2])
-                summary_parts.append(f"Additional coverage from {sources_text}")
+            # Add article header with number
+            article_parts.append(f"\n🔹 *Article {i}:*")
         
-        return " ".join(summary_parts)
+            # Include title if available and meaningful
+            if len(title) > 10:  # Basic length check to filter out placeholder text
+                article_parts.append(f"*{title}*")
+        
+            # Add description if it adds new information
+            if (description and len(description) > 20 and 
+                not (title and description.startswith(title[:20]))):
+                article_parts.append(description)
+        
+            # Extract and add key points from content (first 2-3 sentences)
+            if content:
+                # Split into sentences and take first 3 meaningful ones
+                sentences = [s.strip() for s in content.split('. ') if len(s.split()) > 5]
+                if sentences:
+                    key_points = '. '.join(sentences[:3])
+                    if not key_points.endswith('.'):
+                        key_points += '.'
+                    article_parts.append(f"*Key Points:* {key_points}")
+        
+            # Add source attribution and timestamp
+            attribution = []
+            if source:
+                attribution.append(f"*Source:* {source}")
+            if published_at:
+                try:
+                    pub_date = parser.parse(published_at)
+                    pub_date = pub_date.astimezone(self.market_tz)
+                    attribution.append(f"*Time:* {pub_date.strftime('%I:%M %p ET')}")
+                except:
+                    pass
+        
+            if attribution:
+                article_parts.append(" | ".join(attribution))
+        
+            # Add URL for reference
+            if url:
+                article_parts.append(f"[Read full article]({url})")
+        
+            # Add this article's content to the summary
+            summary_parts.append("\n".join(article_parts))
+    
+        # Add a section for additional coverage if we have more articles
+        if len(articles) > 5:
+            additional_count = len(articles) - 5
+            sources_list = ", ".join(f"{s}" for s in sorted(sources_used)[:3])
+            more_sources = " and others" if len(sources_used) > 3 else ""
+            summary_parts.append(
+                f"\n📚 *Additional Coverage:* {additional_count} more articles available "
+                f"from {sources_list}{more_sources}."
+            )
+    
+        # Join all parts with double newlines for better readability
+        full_summary = "\n\n".join(summary_parts)
+    
+        # Ensure the summary isn't too long (e.g., for API limits)
+        max_length = 1500  # Adjust based on your needs
+        if len(full_summary) > max_length:
+            full_summary = full_summary[:max_length].rsplit(' ', 1)[0] + "..."
+    
+        return full_summary
     
     def _identify_news_catalysts(self, articles: List[Dict]) -> List[str]:
         """Identify potential stock movement catalysts from news articles with enhanced detection"""
@@ -727,11 +807,11 @@ class NewsCollector:
                 
                 # Sort by relevance and recency (less strict date filtering)
                 sorted_news = sorted(
-                    unique_news,
+                    unique_news, 
                     key=lambda x: (
-                        x.get('relevance_score', 0),
+                        x.get('relevance_score', 0), 
                         x.get('published_at', '')
-                    ),
+                    ), 
                     reverse=True
                 )
                 
