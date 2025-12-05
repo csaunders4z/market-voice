@@ -115,23 +115,73 @@ This document outlines the complete requirements for the Market Voices automated
 
 ## Implementation Priority
 
-### Phase 1 (MVP - Must Have)
-1. Core data collection system
-2. Basic script generation
-3. Content validation framework
-4. Error handling and logging
+### Phase 1: Quality Excellence (CURRENT FOCUS) 🎯
+**Priority**: Achieve consistent, high-quality output before deployment
 
-### Phase 2 (Quality - Should Have)
-1. Enhanced data collection with news integration
-2. Advanced script features and personality development
-3. Content quality controls and validation
+1. **Content Quality Controls**
+   - Phrase repetition detection (>3 words max twice per episode)
+   - Stock terminology limits (e.g., "earnings per share" max 3x)
+   - Smooth transition validation
+   - Quality scoring system improvements
 
-### Phase 3 (Enhancement - Could Have)
+2. **Advanced Script Features**
+   - Natural speaking patterns with appropriate pauses
+   - Varied transition phrases between segments
+   - Logical stock connections (sector trends, opposing moves)
+   - Enhanced host personality distinctions
+   - Occasional appropriate humor from Marcus
+
+3. **Enhanced Data Collection**
+   - Complete technical indicators integration (RSI, MACD)
+   - Multi-source validation for moves >5%
+   - Sector/industry context integration
+   - 24-hour news recency enforcement
+
+4. **Quality Validation & Testing**
+   - Comprehensive quality scoring (target: >90%)
+   - Iterative testing and refinement
+   - Quality metrics tracking
+   - Output consistency validation
+
+**Success Criteria**: Quality score >90%, zero factual errors, consistent professional output
+
+### Phase 2: Architecture Refactoring for Hosted Solution 🏗️
+**Priority**: Refactor for cloud deployment after quality is achieved
+
+1. **Code Organization & Modularity**
+   - Refactor for cloud-native architecture
+   - Environment-based configuration
+   - Service-oriented design patterns
+
+2. **Data Management**
+   - Database integration for historical data
+   - Caching mechanisms for API calls
+   - Data persistence and retrieval
+
+3. **Infrastructure & Deployment**
+   - Cloud infrastructure setup (AWS/other)
+   - Containerization optimization
+   - CI/CD pipeline implementation
+   - Automated scheduling system
+
+4. **Monitoring & Operations**
+   - Comprehensive logging system
+   - Health checks and alerting
+   - Performance monitoring
+   - Error tracking and recovery
+
+**Success Criteria**: Scalable, maintainable architecture ready for production deployment
+
+### Phase 3: Video Production Automation 🎥
+**Priority**: Complete automation pipeline
+
 1. Video production automation
-2. Technical enhancements and caching
+2. Technical enhancements and optimization
 3. Content expansion features
 
-### Phase 4 (Future - Won't Have)
+### Phase 4: Advanced Features & Scaling 🚀
+**Priority**: Business growth and advanced capabilities
+
 1. Advanced monetization features
 2. Premium content capabilities
 3. Enterprise-level features
@@ -172,22 +222,27 @@ This document outlines the complete requirements for the Market Voices automated
 
 ## Timeline Considerations
 
-### Immediate (Next 2 weeks)
-- Complete MVP data collection
-- Basic script generation
-- Error handling implementation
+### Immediate (Next 2-4 weeks) - Quality Focus
+- **Content Quality Controls**: Implement phrase repetition detection, terminology limits
+- **Script Refinement**: Enhance host personalities, natural transitions, logical connections
+- **Quality Validation**: Improve quality scoring system, target >90% quality score
+- **Iterative Testing**: Generate and review multiple outputs, refine based on feedback
+- **Data Quality**: Complete technical indicators, multi-source validation
 
-### Short-term (1-2 months)
-- Enhanced data collection
-- Advanced script features
-- Content quality controls
+### Short-term (1-2 months) - Quality Excellence
+- **Quality Consistency**: Achieve consistent >90% quality scores across multiple runs
+- **Host Personality**: Perfect host personality distinctions and natural speaking patterns
+- **Content Standards**: Zero factual errors, professional tone, balanced speaking time
+- **Testing Framework**: Comprehensive quality testing and validation
 
-### Medium-term (3-6 months)
-- Video production automation
-- YouTube channel setup
-- Monetization preparation
+### Medium-term (2-4 months) - Architecture Refactoring
+- **Code Refactoring**: Modularize for cloud deployment, service-oriented design
+- **Infrastructure Setup**: Cloud provider selection and setup
+- **Database Integration**: Historical data storage and caching
+- **Deployment Pipeline**: CI/CD setup, containerization, automated scheduling
 
-### Long-term (6+ months)
-- Advanced features
-- Scaling considerations
-- Enterprise capabilities 
+### Long-term (4-6 months) - Video Production & Scaling
+- **Video Production**: ElevenLabs integration, video editing pipeline
+- **YouTube Automation**: Upload automation, thumbnail generation
+- **Content Expansion**: Weekly wraps, holiday handling
+- **Monitoring & Operations**: Production monitoring, alerting, optimization 

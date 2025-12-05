@@ -15,10 +15,11 @@ load_dotenv()
 class Settings(BaseSettings):
     """Application settings with environment variable support"""
     
-    # API Keys
-    alpha_vantage_api_key: str = Field(..., env="ALPHA_VANTAGE_API_KEY")
-    the_news_api_api_key: str = Field(..., env="THE_NEWS_API_API_KEY")
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+    # API Keys (optional - will use empty string if not provided)
+    alpha_vantage_api_key: str = Field(default="", env="ALPHA_VANTAGE_API_KEY")
+    news_api_key: str = Field(default="", env="NEWS_API_KEY")
+    the_news_api_api_key: str = Field(default="", env="THE_NEWS_API_API_KEY")  # Alternative news API
+    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     rapidapi_key: str = Field(default="", env="RAPIDAPI_KEY")  # Optional for Biztoc news
     biztoc_api_key: str = Field(default="", env="BIZTOC_API_KEY")
     finnhub_api_key: str = Field(default="", env="FINNHUB_API_KEY")
@@ -122,7 +123,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
-        extra = "allow"  # Allow extra fields from environment variables
+        extra = "ignore"  # Ignore extra fields in .env file
 
 
 # Remove global settings instance
@@ -134,10 +135,4 @@ def get_settings():
     global _settings_instance
     if _settings_instance is None:
         _settings_instance = Settings()
-    return _settings_instance 
-
-def get_finnhub_api_key():
-    return os.getenv("FINNHUB_API_KEY", "")
-
-def get_alpha_vantage_api_key():
-    return os.getenv("ALPHA_VANTAGE_API_KEY", "")                        
+    return _settings_instance                        

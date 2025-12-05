@@ -162,33 +162,33 @@ class MarketVoicesApp:
         
         # Save market data
         market_file = self.output_dir / f"market_data_{timestamp}.json"
-        with open(market_file, 'w') as f:
-            json.dump(market_data, f, indent=2, default=str)
+        with open(market_file, 'w', encoding='utf-8') as f:
+            json.dump(market_data, f, indent=2, default=str, ensure_ascii=False)
         self.logger.info(f"Market data saved to {market_file}")
         
         # Save script
         script_file = self.output_dir / f"script_{timestamp}.json"
-        with open(script_file, 'w') as f:
-            json.dump(script_data, f, indent=2, default=str)
+        with open(script_file, 'w', encoding='utf-8') as f:
+            json.dump(script_data, f, indent=2, default=str, ensure_ascii=False)
         self.logger.info(f"Script saved to {script_file}")
         
         # Save formatted script
         formatted_script = script_generator.format_script_for_output(script_data)
         formatted_file = self.output_dir / f"script_formatted_{timestamp}.txt"
-        with open(formatted_file, 'w') as f:
+        with open(formatted_file, 'w', encoding='utf-8') as f:
             f.write(formatted_script)
         self.logger.info(f"Formatted script saved to {formatted_file}")
         
         # Save quality results
         quality_file = self.output_dir / f"quality_report_{timestamp}.json"
-        with open(quality_file, 'w') as f:
-            json.dump(quality_results, f, indent=2, default=str)
+        with open(quality_file, 'w', encoding='utf-8') as f:
+            json.dump(quality_results, f, indent=2, default=str, ensure_ascii=False)
         self.logger.info(f"Quality report saved to {quality_file}")
         
         # Save summary with cost information
         summary = self._create_summary(market_data, script_data, quality_results)
         summary_file = self.output_dir / f"daily_summary_{timestamp}.txt"
-        with open(summary_file, 'w') as f:
+        with open(summary_file, 'w', encoding='utf-8') as f:
             f.write(summary)
         self.logger.info(f"Daily summary saved to {summary_file}")
     
